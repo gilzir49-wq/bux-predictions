@@ -234,7 +234,7 @@ function isLocked(){
 }
 
 // ---------- ניקוד ----------
-function hasResult(g){ const r=S.results[g.id]; return r && (r.status==='live'||r.status==='finished'); }
+function hasResult(g, R=S.results){ const r=R[g.id]; return r && (r.status==='live'||r.status==='finished'); }
 const sign = n => n>0?1:n<0?-1:0;
 function judge(pred, res){ // 'ex' | 'di' | 'wr'
   if(!pred||!res) return null;
@@ -243,18 +243,18 @@ function judge(pred, res){ // 'ex' | 'di' | 'wr'
   return 'wr';
 }
 const sc = (h,a,sep=' : ') => `<span class="scr">${h|0}${sep}${a|0}</span>`;   // תוצאה – הבית מימין
-const anyResult = () => GAMES.some(hasResult);
-const actualTotal = () => GAMES.reduce((t,g)=> t + (hasResult(g) ? (S.results[g.id].h|0)+(S.results[g.id].a|0) : 0), 0);
-function standings(){
+const anyResult = (R=S.results) => GAMES.some(g=>hasResult(g,R));
+const actualTotal = (R=S.results) => GAMES.reduce((t,g)=> t + (hasResult(g,R) ? (R[g.id].h|0)+(R[g.id].a|0) : 0), 0);
+function standings(R=S.results){
   const ps = Object.entries(S.players).filter(([k,p])=>p && typeof p==='object');
   // כמה פגעו בתוצאה המדויקת בכל משחק (לבונוס האמיץ)
   const exCount = {};
-  GAMES.forEach(g=>{ if(hasResult(g)) exCount[g.id] = ps.filter(([k,p])=>judge(p.preds&&p.preds[g.id], S.results[g.id])==='ex').length; });
-  const total = actualTotal(), useTotal = anyResult();
+  GAMES.forEach(g=>{ if(hasResult(g,R)) exCount[g.id] = ps.filter(([k,p])=>judge(p.preds&&p.preds[g.id], R[g.id])==='ex').length; });
+  const total = actualTotal(R), useTotal = anyResult(R);
   const rows = ps.map(([k,p])=>{
     let pts=0, ex=0, di=0, stars=0; const per={}, brave={};
-    GAMES.forEach(g=>{ if(!hasResult(g)) return;
-      const j = judge(p.preds&&p.preds[g.id], S.results[g.id]);
+    GAMES.forEach(g=>{ if(!hasResult(g,R)) return;
+      const j = judge(p.preds&&p.preds[g.id], R[g.id]);
       let v = j==='ex'?PTS_EXACT : j==='di'?PTS_DIR : 0;
       if(p.joker===g.id) v *= JOKER_MULT;
       if(j==='ex' && exCount[g.id]===1){ v += BRAVE_BONUS; stars++; brave[g.id]=true; }
@@ -268,7 +268,9 @@ function standings(){
   rows.forEach((r,i)=>{ const p=rows[i-1]; r.rank = (p && p.pts===r.pts && p.ex===r.ex && p.tdiff===r.tdiff) ? p.rank : i+1; });
   return rows;
 }
-function rankMap(){ const m={}; standings().forEach(r=>m[r.k]=r.rank); return m; }
+function rankMap(R){ const m={}; standings(R).forEach(r=>m[r.k]=r.rank); return m; }
+// הדירוג לפני עדכון התוצאה האחרון (לחצים ול"עלו בטבלה")
+function prevRankMap(){ const pr=S.meta.prevResults; return pr ? rankMap(pr.r||{}) : {}; }
 const allFinished = () => GAMES.every(g=>S.results[g.id]&&S.results[g.id].status==='finished');
 
 // ---------- טיוטת ניחושים ----------
@@ -384,7 +386,7 @@ function teamStep(g,side,name,val,L){
 }
 
 function viewTable(){
-  const rows=standings(), L=isLocked(), prev=S.meta.prevRanks||{};
+  const rows=standings(), L=isLocked(), prev=prevRankMap();
   // עונשי BUX: לפי דירוג מהסוף (לא כולל מקום ראשון)
   const fromBottom=[...new Set(rows.map(r=>r.rank))].filter(x=>x>1).sort((a,b)=>b-a);
   let h = statusBar() + `<h2>טבלת הדירוג 🏆</h2><div class="muted">מתעדכנת חי עם כל גול · החצים = שינוי מאז עדכון התוצאה האחרון</div>`;
@@ -437,7 +439,11 @@ function viewAdmin(){
     <div class="card"><b>נעילת ניחושים</b><div class="seg">
       <button class="${!S.meta.lock?'on':''}" onclick="setLock(null)">⏰ אוטומטי (${KICKOFF_LABEL})</button>
       <button class="${S.meta.lock==='locked'?'on red':''}" onclick="setLock('locked')">🔒 נעל עכשיו</button>
-      <button class="${S.meta.lock==='open'?'on grn':''}" onclick="setLock('open')">🔓 פתח</button></div></div>`;
+      <button class="${S.meta.lock==='open'?'on grn':''}" onclick="setLock('open')">🔓 פתח</button></div></div>
+    <div class="card"><b>🤖 תוצאות אוטומטיות (LiveScore)</b>
+      <div class="muted" style="margin-top:4px">${S.meta.robotAt?`הרובוט בדק לאחרונה ב-${new Date(S.meta.robotAt).toLocaleTimeString('he-IL',{timeZone:'Asia/Jerusalem'})}${Date.now()-S.meta.robotAt>90000?' ⚠️ לא פעיל כרגע – עדכן ידנית':' ✅'}`:'הרובוט עוד לא התחבר'} · תיקון ידני נשמר עד שהתוצאה במקור משתנה</div>
+      <div class="seg"><button class="${S.meta.auto!=='off'?'on grn':''}" onclick="setAuto(null)">פועל</button>
+      <button class="${S.meta.auto==='off'?'on red':''}" onclick="setAuto('off')">כבוי (ידני בלבד)</button></div></div>`;
   GAMES.forEach((g,i)=>{
     const r=S.results[g.id]||{}, st=r.status||'none', hv=r.h|0, av=r.a|0;
     h += `<div class="card game"><div class="meta"><span>משחק ${i+1}</span><span>${st==='live'?'<span class="live">חי</span>':st==='finished'?'<span class="fin">הסתיים</span>':'טרם החל'}</span></div>
@@ -463,9 +469,9 @@ function adminStep(g,side,name,val){
     <button class="plus" onclick="setScore('${g.id}','${side}',1)">+</button></div></div>`;
 }
 async function pushResult(gid, r){
-  const prev = rankMap();               // הדירוג לפני העדכון → חצים + "עלו בטבלה"
+  const prev = {r: JSON.parse(JSON.stringify(S.results)), t: Date.now()};   // התוצאות לפני העדכון → חצים + "עלו בטבלה"
   S.results[gid]=r; render();
-  await save('PATCH','', {['results/'+gid]:r, 'meta/prevRanks':prev}, null);
+  await save('PATCH','', {['results/'+gid]:r, 'meta/prevResults':prev}, null);
 }
 function setScore(gid, side, d){
   const r=Object.assign({h:0,a:0,status:'live'}, S.results[gid]||{});
@@ -476,6 +482,7 @@ function setStatus(gid, st){
   const r=Object.assign({h:0,a:0}, S.results[gid]||{}); r.status=st;
   pushResult(gid, r);
 }
+async function setAuto(v){ S.meta.auto=v||undefined; render(); await save('PUT','meta/auto',v); }
 async function setLock(v){ S.meta.lock=v||undefined; render(); await save('PUT','meta/lock',v); }
 function aedOpen(k){
   const p=S.players[k]; if(!p) return;
@@ -557,7 +564,7 @@ function detectGoals(){
   seenGoals=now;
 }
 function showGoal(g){
-  const r=S.results[g.id], prev=S.meta.prevRanks||{};
+  const r=S.results[g.id], prev=prevRankMap();
   const up=standings().filter(x=>prev[x.k]!=null && prev[x.k]>x.rank).length;
   const el=document.getElementById('goalbar');
   el.innerHTML=`<span class="big">⚽ גול!</span>${esc(g.home)} ${sc(r.h,r.a,'–')} ${esc(g.away)}${up?` · ${up} עלו בטבלה`:''}`;

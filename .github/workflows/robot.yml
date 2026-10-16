@@ -1,0 +1,17 @@
+name: רובוט תוצאות לייב
+on:
+  workflow_dispatch:
+    inputs:
+      node:
+        description: 'Firebase node'
+        default: 'bux-predictions'
+  schedule:
+    - cron: '45 12 16 10 *'   # גיבוי: 15:45 שעון ישראל, 16.10
+jobs:
+  robot:
+    runs-on: ubuntu-latest
+    timeout-minutes: 330
+    concurrency: robot
+    steps:
+      - uses: actions/checkout@v4
+      - run: python3 robot.py "${{ github.event.inputs.node || 'bux-predictions' }}"
