@@ -247,6 +247,8 @@ function judge(pred, res){ // 'ex' | 'di' | 'wr'
   if(sign(pred.h-pred.a)===sign(res.h-res.a)) return 'di';
   return 'wr';
 }
+// תגית "חי" עם הדקה הנוכחית מהרובוט
+function liveTag(r){ const m=(r&&r.min||'').trim(); const t = !m ? '' : m==='HT' ? ' · מחצית' : ' · '+m.replace(/'$/,'')+"'"; return `<span class="live">חי${t}</span>`; }
 const sc = (h,a,sep=' : ') => `<span class="scr">${h|0}${sep}${a|0}</span>`;   // תוצאה – הבית מימין
 const anyResult = (R=S.results) => GAMES.some(g=>hasResult(g,R));
 const actualTotal = (R=S.results) => GAMES.reduce((t,g)=> t + (hasResult(g,R) ? (R[g.id].h|0)+(R[g.id].a|0) : 0), 0);
@@ -326,7 +328,7 @@ function statusBar(){
 function renderStatus(){ const el=document.getElementById('status'); if(el) el.outerHTML=statusBar(); }
 function resLine(g){
   const r=S.results[g.id]; if(!r||!hasResult(g)) return '';
-  return `<div class="real">תוצאה ${r.status==='live'?'<span class="live">חי</span>':'<span class="fin">הסתיים</span>'} &nbsp; ${sc(r.h,r.a)}  <span class="muted">(${esc(g.home)} – ${esc(g.away)})</span></div>`;
+  return `<div class="real">תוצאה ${r.status==='live'?liveTag(r):'<span class="fin">הסתיים</span>'} &nbsp; ${sc(r.h,r.a)}  <span class="muted">(${esc(g.home)} – ${esc(g.away)})</span></div>`;
 }
 
 function viewLogin(){
@@ -361,7 +363,7 @@ function viewPred(){
     const d=draft.preds[g.id], r=S.results[g.id], j=hasResult(g)?judge(p&&p.preds&&p.preds[g.id],r):null, isJ=draft.joker===g.id;
     const v = mine && mine.per[g.id]!=null ? mine.per[g.id] : null;
     h += `<div class="card game ${isJ?'jk':''}" ${j&&!isJ?`style="border-color:${j==='ex'?'var(--g)':j==='di'?'var(--y)':'var(--r)'}"`:''}>
-      <div class="meta"><span>משחק ${i+1} · ליגה לאומית</span><span>${KICKOFF_LABEL}${j?' · '+(j==='ex'?'🎯':j==='di'?'✔️':'❌')+' +'+v+(mine.brave[g.id]?' ⭐':''):''}</span></div>
+      <div class="meta"><span>משחק ${i+1} · ליגה לאומית</span><span>${r&&r.status==='live'?liveTag(r):KICKOFF_LABEL}${j?' · '+(j==='ex'?'🎯':j==='di'?'✔️':'❌')+' +'+v+(mine.brave[g.id]?' ⭐':''):''}</span></div>
       <div class="teams">
         ${teamStep(g,'h',g.home,d.h,L)}<div class="vs">VS</div>${teamStep(g,'a',g.away,d.a,L)}
       </div>${resLine(g)}
@@ -424,7 +426,7 @@ function viewGames(){
   GAMES.forEach((g,i)=>{
     const r=S.results[g.id], has=hasResult(g);
     h += `<div class="card"><div style="font-weight:900;font-size:16px">${esc(g.home)} – ${esc(g.away)}</div>
-      <div class="muted" style="margin:4px 0 8px">${has?`${r.status==='live'?'<span class="live">חי</span>':'<span class="fin">הסתיים</span>'} תוצאה: <b style="color:#fff">${sc(r.h,r.a)}</b>`:'טרם החל'}</div>`;
+      <div class="muted" style="margin:4px 0 8px">${has?`${r.status==='live'?liveTag(r):'<span class="fin">הסתיים</span>'} תוצאה: <b style="color:#fff">${sc(r.h,r.a)}</b>`:'טרם החל'}</div>`;
     const st = Object.fromEntries(standings().map(x=>[x.name,x]));
     const list = players.map(p=>({p, pr:p.preds[g.id], j:has?judge(p.preds[g.id],r):null}))
       .sort((a,b)=>({ex:0,di:1,wr:2}[a.j]??3)-({ex:0,di:1,wr:2}[b.j]??3));
@@ -451,7 +453,7 @@ function viewAdmin(){
       <button class="${S.meta.auto==='off'?'on red':''}" onclick="setAuto('off')">כבוי (ידני בלבד)</button></div></div>`;
   GAMES.forEach((g,i)=>{
     const r=S.results[g.id]||{}, st=r.status||'none', hv=r.h|0, av=r.a|0;
-    h += `<div class="card game"><div class="meta"><span>משחק ${i+1}</span><span>${st==='live'?'<span class="live">חי</span>':st==='finished'?'<span class="fin">הסתיים</span>':'טרם החל'}</span></div>
+    h += `<div class="card game"><div class="meta"><span>משחק ${i+1}</span><span>${st==='live'?liveTag(r):st==='finished'?'<span class="fin">הסתיים</span>':'טרם החל'}</span></div>
       <div class="teams">${adminStep(g,'h',g.home,hv)}<div class="vs">:</div>${adminStep(g,'a',g.away,av)}</div>
       <div class="seg"><button class="${st==='none'?'on':''}" onclick="setStatus('${g.id}','none')">טרם החל</button>
         <button class="${st==='live'?'on red':''}" onclick="setStatus('${g.id}','live')">🔴 חי</button>

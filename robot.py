@@ -42,7 +42,7 @@ def tick():
         return 'off'
     f = feed()
     results = http(f'{DB}/{NODE}/results.json') or {}
-    upd = {}
+    upd, mins = {}, {}
     for gid, eid in MAP.items():
         e = f.get(eid)
         if not e: continue
@@ -51,9 +51,12 @@ def tick():
         a = int(e.get('Tr2') or 0) if st != 'none' else 0
         sig = f'{h}-{a}-{st}'
         cur = results.get(gid) or {}
+        mn = (e.get('Eps') or '').strip() if st == 'live' else ''   # הדקה הנוכחית ("37'", "HT")
         if cur.get('feed') != sig:
-            upd[f'results/{gid}'] = {'h': h, 'a': a, 'status': st, 'feed': sig}
-    stamp = {'meta/robotAt': int(time.time() * 1000)}
+            upd[f'results/{gid}'] = {'h': h, 'a': a, 'status': st, 'feed': sig, 'min': mn}
+        elif cur.get('min', '') != mn:
+            mins[f'results/{gid}/min'] = mn or None
+    stamp = {'meta/robotAt': int(time.time() * 1000), **mins}   # עדכון דקה בלבד לא נחשב "עדכון תוצאה"
     if upd:
         upd['meta/prevResults'] = {'r': results, 't': int(time.time() * 1000)}   # לחצים בטבלה + "עלו בטבלה"
         http(f'{DB}/{NODE}.json', 'PATCH', {**upd, **stamp})
