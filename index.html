@@ -233,6 +233,7 @@ async function save(method, path, body, okMsg='נשמר! ✅'){
 function isLocked(){
   const l = S.meta.lock;
   if(l==='locked') return true;
+  if(S.meta.lockAt) return Date.now() >= S.meta.lockAt;   // הארכה ע"י המנהל
   if(l==='open') return false;
   return Date.now() >= LOCK_AT.getTime();
 }
@@ -310,7 +311,7 @@ async function submit(){
 // ---------- רינדור ----------
 function ad(){ adIdx=(adIdx+1)%ADS.length; return `<div class="ad">📢 ${ADS[adIdx]}</div>`; }
 function countdown(){
-  const ms = LOCK_AT.getTime()-Date.now();
+  const ms = (S.meta.lockAt||LOCK_AT.getTime())-Date.now();
   if(ms<=0) return '';
   const h=Math.floor(ms/3.6e6), m=Math.floor(ms%3.6e6/6e4), s=Math.floor(ms%6e4/1e3);
   return (h?h+':':'')+String(m).padStart(2,'0')+':'+String(s).padStart(2,'0');
@@ -319,7 +320,7 @@ function statusBar(){
   const L=isLocked(), cd=countdown();
   return `<div class="status" id="status">
     <span class="pill"><span class="dot ${connected?'on':''}"></span>${connected?'מחובר – חי':'מתחבר...'}</span>
-    <span class="pill ${L?'lock':'open'}">${L?'🔒 הניחושים נעולים':'🔓 פתוח לניחושים'+(cd&&!S.meta.lock?' · '+cd:'')}</span>
+    <span class="pill ${L?'lock':'open'}">${L?'🔒 הניחושים נעולים':'🔓 פתוח לניחושים'+(cd&&(!S.meta.lock||S.meta.lockAt)?' · '+cd:'')}</span>
   </div>`;
 }
 function renderStatus(){ const el=document.getElementById('status'); if(el) el.outerHTML=statusBar(); }
