@@ -1,0 +1,441 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0b0b0b">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>ליגת הניחושים של CrossFit BUX</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Heebo:wght@400;700;900&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#0b0b0b;--card:#171717;--card2:#222;--y:#FFD000;--o:#FF6B00;--txt:#fff;--mut:#9a9a9a;--g:#22c55e;--r:#ef4444;--line:#2c2c2c}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;background:var(--bg);color:var(--txt);font-family:Heebo,system-ui,sans-serif}
+body{padding-bottom:calc(84px + env(safe-area-inset-bottom))}
+.wrap{max-width:520px;margin:0 auto;padding:0 14px}
+header{background:linear-gradient(135deg,var(--y),var(--o));color:#000;padding:16px 14px 14px;text-align:center;position:relative;overflow:hidden}
+header:after{content:"";position:absolute;inset:0;background:repeating-linear-gradient(-45deg,transparent 0 18px,rgba(0,0,0,.06) 18px 36px)}
+header h1{margin:0;font-weight:900;font-size:22px;line-height:1.15;position:relative;z-index:1}
+header .sub{font-size:12px;font-weight:700;margin-top:4px;position:relative;z-index:1;opacity:.8}
+.status{display:flex;justify-content:space-between;align-items:center;gap:8px;margin:12px 0;font-size:14px;font-weight:700}
+.pill{background:var(--card);border:1px solid var(--line);border-radius:99px;padding:6px 12px;white-space:nowrap}
+.pill.lock{border-color:var(--r);color:#ffb4b4}.pill.open{border-color:var(--g);color:#b9f5cd}
+.dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--mut);margin-inline-end:6px}.dot.on{background:var(--g);box-shadow:0 0 8px var(--g)}
+.ad{background:#000;border:2px dashed var(--y);color:var(--y);border-radius:12px;padding:10px 12px;margin:12px 0;font-weight:700;font-size:13.5px;text-align:center}
+.ad b{color:var(--o)}
+.card{background:var(--card);border-radius:16px;padding:14px;margin:12px 0;border:1px solid var(--line)}
+h2{font-weight:900;font-size:20px;margin:18px 0 6px}
+.muted{color:var(--mut);font-size:13px}
+/* משחק */
+.game .meta{display:flex;justify-content:space-between;font-size:12px;color:var(--mut);margin-bottom:8px}
+.teams{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:6px}
+.team{text-align:center}
+.team .nm{font-weight:900;font-size:15px;min-height:38px;display:flex;align-items:center;justify-content:center;line-height:1.15}
+.step{display:flex;align-items:center;justify-content:center;gap:6px;margin-top:6px}
+.step button{width:44px;height:44px;border-radius:12px;border:0;font-size:26px;font-weight:900;font-family:inherit;cursor:pointer;touch-action:manipulation}
+.step .plus{background:var(--y);color:#000}.step .minus{background:var(--card2);color:#fff}
+.step button:active{transform:scale(.92)}
+.step .val{font-size:34px;font-weight:900;min-width:36px;text-align:center}
+.step button:disabled{opacity:.3}
+.vs{font-weight:900;color:var(--o);font-size:18px}
+.live{display:inline-block;background:var(--r);color:#fff;border-radius:6px;padding:1px 7px;font-size:11px;font-weight:900;animation:pulse 1.4s infinite}
+.fin{display:inline-block;background:#333;color:#fff;border-radius:6px;padding:1px 7px;font-size:11px;font-weight:900}
+@keyframes pulse{50%{opacity:.45}}
+.real{margin-top:8px;text-align:center;font-weight:700;font-size:14px;background:#000;border-radius:10px;padding:6px}
+.btn{display:block;width:100%;border:0;border-radius:14px;padding:16px;font-size:19px;font-weight:900;font-family:inherit;cursor:pointer;background:linear-gradient(135deg,var(--y),var(--o));color:#000;box-shadow:0 6px 20px rgba(255,140,0,.3)}
+.btn:active{transform:scale(.98)}.btn.sec{background:var(--card2);color:#fff;box-shadow:none;font-size:16px;padding:12px}
+.btn:disabled{opacity:.5}
+.sticky{position:sticky;bottom:calc(78px + env(safe-area-inset-bottom));padding:8px 0;z-index:5}
+.saved{text-align:center;font-weight:700;font-size:14px;margin:6px 0}
+input.name{width:100%;font-size:20px;padding:14px;border-radius:14px;border:2px solid var(--y);background:#000;color:#fff;font-family:inherit;font-weight:700;text-align:center;margin:10px 0}
+/* טבלה */
+table{width:100%;border-collapse:collapse}
+th{font-size:12px;color:var(--mut);font-weight:700;padding:6px 4px;text-align:center}
+td{padding:10px 4px;text-align:center;border-top:1px solid var(--line);font-weight:700}
+td.n{text-align:right;font-weight:900}
+tr.me td{background:rgba(255,208,0,.08)}
+.pts{font-size:20px;font-weight:900;color:var(--y)}
+.tag{display:block;font-size:11.5px;font-weight:700;margin-top:2px}
+.tag.k{color:var(--y)}.tag.l{color:#ff9a9a}
+.rk{font-size:18px;font-weight:900}
+/* ניחושים לפי משחק */
+.gp{display:flex;justify-content:space-between;align-items:center;padding:8px 10px;border-radius:10px;margin:5px 0;font-weight:700;background:var(--card2)}
+.gp.ex{background:rgba(34,197,94,.22);border-right:5px solid var(--g)}
+.gp.di{background:rgba(255,208,0,.18);border-right:5px solid var(--y)}
+.gp.wr{background:rgba(239,68,68,.18);border-right:5px solid var(--r)}
+.gp .sc{font-weight:900;font-size:17px;direction:ltr}
+.legend{display:flex;gap:10px;font-size:12px;flex-wrap:wrap;color:var(--mut)}
+.legend i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-inline-end:4px;vertical-align:middle}
+/* טאבים */
+nav{position:fixed;bottom:0;left:0;right:0;background:#000;border-top:2px solid var(--y);display:flex;padding-bottom:env(safe-area-inset-bottom);z-index:10}
+nav button{flex:1;background:none;border:0;color:var(--mut);font-family:inherit;font-weight:700;font-size:12px;padding:9px 0 10px;cursor:pointer}
+nav button .ic{display:block;font-size:22px}
+nav button.on{color:var(--y)}
+footer{text-align:center;color:var(--mut);font-size:12px;margin:26px 0 10px}
+footer a{color:var(--mut)}
+/* אדמין */
+.seg{display:flex;gap:6px;margin-top:10px}
+.seg button{flex:1;padding:10px 4px;border-radius:10px;border:1px solid var(--line);background:var(--card2);color:#fff;font-family:inherit;font-weight:700;font-size:13px;cursor:pointer}
+.seg button.on{background:var(--y);color:#000;border-color:var(--y)}
+.seg button.on.red{background:var(--r);color:#fff;border-color:var(--r)}
+.seg button.on.grn{background:var(--g);color:#000;border-color:var(--g)}
+.prow{display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-top:1px solid var(--line)}
+.x{background:none;border:1px solid var(--r);color:var(--r);border-radius:8px;padding:4px 10px;font-family:inherit;cursor:pointer}
+/* סיום */
+#final{position:fixed;inset:0;background:radial-gradient(circle at 50% 30%,#2a1d00,#000 70%);z-index:50;display:none;flex-direction:column;align-items:center;justify-content:center;padding:20px;text-align:center}
+#final.show{display:flex}
+#final h1{font-weight:900;font-size:30px;color:var(--y);margin:0 0 6px}
+.podium{display:flex;align-items:flex-end;justify-content:center;gap:8px;margin:28px 0 18px;width:100%;max-width:400px}
+.pod{flex:1;display:flex;flex-direction:column;align-items:center}
+.pod .who{font-weight:900;font-size:16px;margin-bottom:6px;word-break:break-word}
+.pod .blk{width:100%;border-radius:12px 12px 0 0;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;padding-top:10px;font-weight:900;color:#000}
+.pod.p1 .blk{height:170px;background:linear-gradient(var(--y),var(--o));font-size:40px}
+.pod.p2 .blk{height:120px;background:linear-gradient(#e5e5e5,#9a9a9a);font-size:32px}
+.pod.p3 .blk{height:90px;background:linear-gradient(#e0a060,#a0602a);font-size:28px}
+.pod .blk small{font-size:14px}
+.closing{font-weight:900;font-size:20px;margin:14px 0 22px}
+canvas#conf{position:fixed;inset:0;pointer-events:none;z-index:60}
+.toast{position:fixed;top:16px;left:50%;transform:translateX(-50%);background:var(--y);color:#000;font-weight:900;padding:12px 18px;border-radius:12px;z-index:70;box-shadow:0 6px 20px rgba(0,0,0,.5);transition:opacity .3s}
+</style>
+</head>
+<body>
+
+<!-- ============================================================
+     ✏️  לעריכה — רק כאן: משחקים, שעת נעילה, קוד מנהל, פרסומות
+     ============================================================ -->
+<script id="DATA">
+const GAMES = [
+  { id:'g1', home:'מכבי יפו',        away:'עירוני מודיעין' },
+  { id:'g2', home:'הפועל עפולה',     away:'מכבי הרצליה' },
+  { id:'g3', home:'מ.ס קרית ים',     away:'מ.ס כפר קאסם' },
+  { id:'g4', home:'מכבי אחי נצרת',   away:'הפועל כפר סבא' },
+  { id:'g5', home:'מ.ס אשדוד',       away:'מכבי קריית גת' },
+];
+const KICKOFF_LABEL = '16:00';
+const LOCK_AT = new Date('2026-10-16T16:00:00+03:00');   // נעילה אוטומטית (שעון ישראל)
+const ADMIN_PIN = '1234';                                  // קוד מנהל
+const ADS = [
+  'הניחוש הזה מוגש בחסות <b>CrossFit BUX</b> – כי גם לנחש צריך כושר',
+  'טעית? <b>10 ברפיז</b> ב-BUX יהוד',
+  'תוצאה מדויקת = <b>PR אישי</b> 💪',
+  'הניחושים מתחממים. אתה? <b>WOD ב-BUX</b> 🔥',
+  'הקורה של השער? אצלנו קוראים לזה <b>Pull-up bar</b> 🏋️',
+  'כמו בכדורגל, גם ב-BUX – <b>מי שלא מגיע לאימון, מפסיד</b>',
+  'הפסדת בניחושים? לפחות תנצח ב-<b>Burpee test</b> 😅',
+];
+const DB = 'https://command-center-gal-default-rtdb.europe-west1.firebasedatabase.app';
+const NODE = 'bux-predictions';
+</script>
+
+<header>
+  <h1>ליגת הניחושים של CrossFit BUX 🏋️⚽</h1>
+  <div class="sub">ליגה לאומית · כל המשחקים ב-16:00 · הספונסר הרשמי: CrossFit BUX</div>
+</header>
+<div class="wrap" id="app"></div>
+<nav id="nav"></nav>
+<div id="final"></div>
+<canvas id="conf"></canvas>
+
+<script>
+// ---------- מצב ----------
+let S = { players:{}, results:{}, meta:{} };   // מסונכרן מ-Firebase בזמן אמת
+let connected = false, firstLoad = true;
+let me = lsGet('bux_name');                     // השם נשמר במכשיר
+let tab = lsGet('bux_tab') || 'pred';
+let isAdmin = sessionGet('bux_admin') === '1';
+let draft = null, dirty = false;
+let finalShown = false, adIdx = Math.floor(Math.random()*ADS.length);
+
+function lsGet(k){ try{return localStorage.getItem(k)}catch(e){return null} }
+function lsSet(k,v){ try{ v==null?localStorage.removeItem(k):localStorage.setItem(k,v) }catch(e){} }
+function sessionGet(k){ try{return sessionStorage.getItem(k)}catch(e){return null} }
+function sessionSet(k,v){ try{sessionStorage.setItem(k,v)}catch(e){} }
+const esc = s => String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const keyOf = name => name.trim().replace(/[.#$\[\]\/]/g,'_');
+
+// ---------- Firebase: האזנה חיה (SSE) + כתיבה ----------
+function applyAt(path, data){
+  const parts = path.split('/').filter(Boolean);
+  if(!parts.length){ S = Object.assign({players:{},results:{},meta:{}}, data||{}); return; }
+  let o = S;
+  for(let i=0;i<parts.length-1;i++){ if(typeof o[parts[i]]!=='object'||o[parts[i]]===null) o[parts[i]]={}; o=o[parts[i]]; }
+  const last = parts[parts.length-1];
+  if(data===null) delete o[last]; else o[last]=data;
+  S.players=S.players||{}; S.results=S.results||{}; S.meta=S.meta||{};
+}
+function listen(){
+  const es = new EventSource(`${DB}/${NODE}.json`);
+  const onMsg = (isPatch) => ev => {
+    const {path, data} = JSON.parse(ev.data);
+    if(isPatch) for(const k in data) applyAt(path.replace(/\/$/,'')+'/'+k, data[k]);
+    else applyAt(path, data);
+    connected = true;
+    if(firstLoad){ firstLoad=false; initDraft(); }
+    syncDraftFromServer();
+    render();
+  };
+  es.addEventListener('put', onMsg(false));
+  es.addEventListener('patch', onMsg(true));
+  es.onerror = () => { connected=false; renderStatus(); };
+  es.onopen = () => { connected=true; renderStatus(); };
+}
+async function api(method, path, body){
+  const r = await fetch(`${DB}/${NODE}/${path}.json`, {method, body: body===undefined?undefined:JSON.stringify(body)});
+  if(!r.ok) throw new Error('שגיאת שמירה');
+  return r;
+}
+
+// ---------- נעילה ----------
+function isLocked(){
+  const l = S.meta.lock;
+  if(l==='locked') return true;
+  if(l==='open') return false;
+  return Date.now() >= LOCK_AT.getTime();
+}
+
+// ---------- ניקוד ----------
+function hasResult(g){ const r=S.results[g.id]; return r && (r.status==='live'||r.status==='finished'); }
+const sign = n => n>0?1:n<0?-1:0;
+function judge(pred, res){ // 'ex' | 'di' | 'wr'
+  if(!pred||!res) return null;
+  if(pred.h===res.h && pred.a===res.a) return 'ex';
+  if(sign(pred.h-pred.a)===sign(res.h-res.a)) return 'di';
+  return 'wr';
+}
+function standings(){
+  const rows = Object.entries(S.players).map(([k,p])=>{
+    let pts=0, ex=0, di=0;
+    GAMES.forEach(g=>{ if(!hasResult(g)) return; const j=judge(p.preds&&p.preds[g.id], S.results[g.id]);
+      if(j==='ex'){pts+=3;ex++} else if(j==='di'){pts+=1;di++} });
+    return {k, name:p.name||k, pts, ex, di, sent:!!p.preds};
+  });
+  rows.sort((a,b)=> b.pts-a.pts || b.ex-a.ex || a.name.localeCompare(b.name,'he'));
+  rows.forEach((r,i)=>{ const p=rows[i-1]; r.rank = (p && p.pts===r.pts && p.ex===r.ex) ? p.rank : i+1; });
+  return rows;
+}
+const allFinished = () => GAMES.every(g=>S.results[g.id]&&S.results[g.id].status==='finished');
+
+// ---------- טיוטת ניחושים ----------
+function myPlayer(){ return me ? S.players[keyOf(me)] : null; }
+function initDraft(){
+  const p = myPlayer(); let saved=null; try{ saved = JSON.parse(lsGet('bux_draft')||'null') }catch(e){}
+  draft = {};
+  GAMES.forEach(g=>{ const v=(saved&&saved[g.id])||(p&&p.preds&&p.preds[g.id])||{h:0,a:0}; draft[g.id]={h:v.h|0,a:v.a|0}; });
+  dirty = !!saved && JSON.stringify(saved)!==JSON.stringify(p&&p.preds?pick(p.preds):null);
+}
+function pick(preds){ const o={}; GAMES.forEach(g=>{ const v=preds[g.id]||{h:0,a:0}; o[g.id]={h:v.h|0,a:v.a|0} }); return o; }
+function syncDraftFromServer(){ if(!dirty && me){ const p=myPlayer(); if(p&&p.preds) draft=pick(p.preds); } }
+function bump(gid, side, d){
+  if(isLocked()) return;
+  draft[gid][side] = Math.max(0, Math.min(15, draft[gid][side]+d));
+  dirty = true; lsSet('bux_draft', JSON.stringify(draft)); render();
+}
+async function submit(){
+  if(isLocked()) return toast('הניחושים נעולים 🔒');
+  const btn = document.getElementById('sendBtn'); if(btn){btn.disabled=true; btn.textContent='שולח...';}
+  try{
+    await api('PUT', 'players/'+keyOf(me), {name:me.trim(), preds:draft, at:Date.now()});
+    dirty=false; lsSet('bux_draft',null); toast('הניחושים נשלחו! 💪 עכשיו רק לחכות לשריקה');
+  }catch(e){ toast('אופס, השליחה נכשלה – נסה שוב'); }
+  render();
+}
+
+// ---------- רינדור ----------
+function ad(){ adIdx=(adIdx+1)%ADS.length; return `<div class="ad">📢 ${ADS[adIdx]}</div>`; }
+function countdown(){
+  const ms = LOCK_AT.getTime()-Date.now();
+  if(ms<=0) return '';
+  const h=Math.floor(ms/3.6e6), m=Math.floor(ms%3.6e6/6e4), s=Math.floor(ms%6e4/1e3);
+  return (h?h+':':'')+String(m).padStart(2,'0')+':'+String(s).padStart(2,'0');
+}
+function statusBar(){
+  const L=isLocked(), cd=countdown();
+  return `<div class="status" id="status">
+    <span class="pill"><span class="dot ${connected?'on':''}"></span>${connected?'מחובר – חי':'מתחבר...'}</span>
+    <span class="pill ${L?'lock':'open'}">${L?'🔒 הניחושים נעולים':'🔓 פתוח לניחושים'+(cd&&!S.meta.lock?' · '+cd:'')}</span>
+  </div>`;
+}
+function renderStatus(){ const el=document.getElementById('status'); if(el) el.outerHTML=statusBar(); }
+function resLine(g){
+  const r=S.results[g.id]; if(!r||!hasResult(g)) return '';
+  return `<div class="real">תוצאה ${r.status==='live'?'<span class="live">חי</span>':'<span class="fin">הסתיים</span>'} &nbsp; <span style="direction:ltr;display:inline-block">${r.h} : ${r.a}</span>  <span class="muted">(${esc(g.home)} – ${esc(g.away)})</span></div>`;
+}
+
+function viewLogin(){
+  return `<div class="card" style="text-align:center;margin-top:24px">
+    <div style="font-size:54px">🏋️⚽</div>
+    <h2 style="margin-top:4px">מי אתה, אלוף?</h2>
+    <div class="muted">רק שם. בלי סיסמה, בלי הרשמה, בלי תירוצים.</div>
+    <input class="name" id="nameIn" placeholder="השם שלך" maxlength="20" autocomplete="off">
+    <button class="btn" onclick="login()">יאללה, לנחש! 🔥</button>
+  </div>${ad()}`;
+}
+function login(){
+  const v=(document.getElementById('nameIn').value||'').trim();
+  if(v.length<2) return toast('שם של לפחות 2 אותיות 🙂');
+  me=v; lsSet('bux_name',v); lsSet('bux_draft',null); initDraft(); tab='pred'; render();
+}
+function logout(){ if(!confirm('להתנתק מהמכשיר?')) return; me=null; lsSet('bux_name',null); lsSet('bux_draft',null); render(); }
+
+function viewPred(){
+  const L=isLocked(), p=myPlayer();
+  let h = statusBar() + `<h2>הניחושים של ${esc(me)} 🎯</h2>
+    <div class="muted">3 נק' לתוצאה מדויקת · נקודה לכיוון נכון · ${L?'הניחושים נעולים':'אפשר לערוך עד '+KICKOFF_LABEL}</div>`;
+  GAMES.forEach((g,i)=>{
+    const d=draft[g.id], r=S.results[g.id], j=hasResult(g)?judge(p&&p.preds&&p.preds[g.id],r):null;
+    h += `<div class="card game" ${j?`style="border-color:${j==='ex'?'var(--g)':j==='di'?'var(--y)':'var(--r)'}"`:''}>
+      <div class="meta"><span>משחק ${i+1} · ליגה לאומית</span><span>${KICKOFF_LABEL}${j?' · '+(j==='ex'?'🎯 +3':j==='di'?'✔️ +1':'❌ 0'):''}</span></div>
+      <div class="teams">
+        ${teamStep(g,'h',g.home,d.h,L)}<div class="vs">VS</div>${teamStep(g,'a',g.away,d.a,L)}
+      </div>${resLine(g)}</div>`;
+    if(i===2) h+=ad();
+  });
+  if(!L){
+    h += `<div class="sticky"><button class="btn" id="sendBtn" onclick="submit()">${p&&p.preds?(dirty?'עדכן ניחושים ✍️':'נשלח ✓ (אפשר לשנות)'):'שלח ניחושים 🚀'}</button>
+      ${dirty&&p&&p.preds?'<div class="saved" style="color:var(--o)">יש שינויים שעוד לא נשלחו</div>':''}</div>`;
+  } else if(!(p&&p.preds)){
+    h += `<div class="card" style="text-align:center">😬 לא שלחת ניחושים בזמן… זה <b>20 ברפיז</b> ב-BUX</div>`;
+  }
+  h += ad() + `<footer>מחובר כ-${esc(me)} · <a href="#" onclick="logout();return false">החלף משתמש</a></footer>`;
+  return h;
+}
+function teamStep(g,side,name,val,L){
+  return `<div class="team"><div class="nm">${esc(name)}</div>
+    <div class="step"><button class="minus" ${L||val<=0?'disabled':''} onclick="bump('${g.id}','${side}',-1)">−</button>
+    <span class="val">${val}</span>
+    <button class="plus" ${L?'disabled':''} onclick="bump('${g.id}','${side}',1)">+</button></div></div>`;
+}
+
+function viewTable(){
+  const rows=standings(), last=rows.length>1?rows[rows.length-1].rank:0;
+  let h = statusBar() + `<h2>טבלת הדירוג 🏆</h2><div class="muted">מתעדכנת חי עם כל גול</div>`;
+  if(allFinished()) h+=`<button class="btn" style="margin:12px 0" onclick="showFinal(true)">🎉 למסך הסיום</button>`;
+  h += `<div class="card" style="padding:6px 10px"><table><thead><tr><th>#</th><th style="text-align:right">שם</th><th>נק'</th><th>🎯 מדויק</th><th>✔️ כיוון</th></tr></thead><tbody>`;
+  if(!rows.length) h+=`<tr><td colspan="5" class="muted">עוד אף אחד לא נרשם… מי ראשון? 🏃</td></tr>`;
+  rows.forEach(r=>{
+    const king=r.rank===1&&rows.length>1, loser=last>1&&r.rank===last;
+    h+=`<tr class="${me&&r.k===keyOf(me)?'me':''}"><td class="rk">${king?'👑':r.rank}</td>
+      <td class="n">${esc(r.name)}${!r.sent?' <span class="muted">(לא שלח)</span>':''}
+        ${king?'<span class="tag k">👑 אלוף BUX של היום</span>':''}${loser?'<span class="tag l">חייב 20 ברפיז ב-CrossFit BUX 😅</span>':''}</td>
+      <td class="pts">${r.pts}</td><td>${r.ex}</td><td>${r.di}</td></tr>`;
+  });
+  h += `</tbody></table></div><div class="muted">שובר שוויון: מספר התוצאות המדויקות</div>` + ad();
+  return h;
+}
+
+function viewGames(){
+  const L=isLocked(), players=Object.values(S.players).filter(p=>p.preds);
+  let h = statusBar() + `<h2>מה כל אחד ניחש 👀</h2>`;
+  if(!L){
+    h += `<div class="card" style="text-align:center"><div style="font-size:40px">🔒</div><b>הניחושים של כולם ייחשפו ב-${KICKOFF_LABEL}</b>
+      <div class="muted" style="margin-top:8px">כבר שלחו (${players.length}): ${players.map(p=>esc(p.name)).join(', ')||'—'}</div></div>` + ad();
+    return h;
+  }
+  h += `<div class="legend"><span><i style="background:var(--g)"></i>מדויק +3</span><span><i style="background:var(--y)"></i>כיוון +1</span><span><i style="background:var(--r)"></i>טעות</span></div>`;
+  GAMES.forEach((g,i)=>{
+    const r=S.results[g.id], has=hasResult(g);
+    h += `<div class="card"><div style="font-weight:900;font-size:16px">${esc(g.home)} – ${esc(g.away)}</div>
+      <div class="muted" style="margin:4px 0 8px">${has?`${r.status==='live'?'<span class="live">חי</span>':'<span class="fin">הסתיים</span>'} תוצאה: <b style="color:#fff;direction:ltr;display:inline-block">${r.h} : ${r.a}</b>`:'טרם החל'}</div>`;
+    const list = players.map(p=>({p, pr:p.preds[g.id], j:has?judge(p.preds[g.id],r):null}))
+      .sort((a,b)=>({ex:0,di:1,wr:2}[a.j]??3)-({ex:0,di:1,wr:2}[b.j]??3));
+    list.forEach(({p,pr,j})=>{ h+=`<div class="gp ${j||''}"><span>${esc(p.name)}</span><span class="sc">${pr?pr.h+' : '+pr.a:'—'}</span></div>`; });
+    if(!list.length) h+=`<div class="muted">אין ניחושים</div>`;
+    h += `</div>`; if(i===1) h+=ad();
+  });
+  return h;
+}
+
+function viewAdmin(){
+  let h = statusBar() + `<h2>⚙️ מסך מנהל</h2><div class="muted">כל שינוי מתעדכן מיד אצל כולם</div>
+    <div class="card"><b>נעילת ניחושים</b><div class="seg">
+      <button class="${!S.meta.lock?'on':''}" onclick="setLock(null)">⏰ אוטומטי (${KICKOFF_LABEL})</button>
+      <button class="${S.meta.lock==='locked'?'on red':''}" onclick="setLock('locked')">🔒 נעל עכשיו</button>
+      <button class="${S.meta.lock==='open'?'on grn':''}" onclick="setLock('open')">🔓 פתח</button></div></div>`;
+  GAMES.forEach((g,i)=>{
+    const r=S.results[g.id]||{}, st=r.status||'none', hv=r.h|0, av=r.a|0;
+    h += `<div class="card game"><div class="meta"><span>משחק ${i+1}</span><span>${st==='live'?'<span class="live">חי</span>':st==='finished'?'<span class="fin">הסתיים</span>':'טרם החל'}</span></div>
+      <div class="teams">${adminStep(g,'h',g.home,hv)}<div class="vs">:</div>${adminStep(g,'a',g.away,av)}</div>
+      <div class="seg"><button class="${st==='none'?'on':''}" onclick="setStatus('${g.id}','none')">טרם החל</button>
+        <button class="${st==='live'?'on red':''}" onclick="setStatus('${g.id}','live')">🔴 חי</button>
+        <button class="${st==='finished'?'on grn':''}" onclick="setStatus('${g.id}','finished')">✅ הסתיים</button></div></div>`;
+  });
+  const ps=Object.entries(S.players);
+  h += `<div class="card"><b>משתתפים (${ps.length})</b>`;
+  ps.forEach(([k,p])=>{ h+=`<div class="prow"><span>${esc(p.name)} ${p.preds?'✅':'⏳'}</span><button class="x" onclick="delPlayer('${esc(k)}')">מחק</button></div>`; });
+  h += `</div><button class="btn sec" onclick="isAdmin=false;sessionSet('bux_admin','0');tab='table';render()">יציאה ממצב מנהל</button>`;
+  return h;
+}
+function adminStep(g,side,name,val){
+  return `<div class="team"><div class="nm">${esc(name)}</div><div class="step">
+    <button class="minus" ${val<=0?'disabled':''} onclick="setScore('${g.id}','${side}',-1)">−</button><span class="val">${val}</span>
+    <button class="plus" onclick="setScore('${g.id}','${side}',1)">+</button></div></div>`;
+}
+async function setScore(gid, side, d){
+  const r=Object.assign({h:0,a:0,status:'live'}, S.results[gid]||{});
+  r[side]=Math.max(0,(r[side]|0)+d); if(r.status==='none') r.status='live';
+  S.results[gid]=r; render();
+  try{ await api('PUT','results/'+gid,r); }catch(e){ toast('שמירה נכשלה'); }
+}
+async function setStatus(gid, st){
+  const r=Object.assign({h:0,a:0}, S.results[gid]||{}); r.status=st;
+  S.results[gid]=r; render();
+  try{ await api('PUT','results/'+gid,r); }catch(e){ toast('שמירה נכשלה'); }
+}
+async function setLock(v){ S.meta.lock=v||undefined; render(); try{ await api('PUT','meta/lock',v); }catch(e){ toast('שמירה נכשלה'); } }
+async function delPlayer(k){ if(!confirm('למחוק את '+(S.players[k]&&S.players[k].name)+'?')) return; try{ await api('DELETE','players/'+k); }catch(e){ toast('מחיקה נכשלה'); } }
+function adminLogin(){
+  const pin=prompt('קוד מנהל:'); if(pin===null) return;
+  if(pin===ADMIN_PIN){ isAdmin=true; sessionSet('bux_admin','1'); tab='admin'; render(); } else toast('קוד שגוי 🙅');
+}
+
+function renderNav(){
+  const tabs=[['pred','🎯','ניחושים'],['table','🏆','טבלה'],['games','👀','מי ניחש מה']];
+  if(isAdmin) tabs.push(['admin','⚙️','מנהל']);
+  document.getElementById('nav').innerHTML = me ? tabs.map(([k,ic,l])=>`<button class="${tab===k?'on':''}" onclick="go('${k}')"><span class="ic">${ic}</span>${l}</button>`).join('') : '';
+}
+function go(k){ tab=k; lsSet('bux_tab',k); render(); window.scrollTo(0,0); }
+function render(){
+  const app=document.getElementById('app');
+  if(!me){ app.innerHTML = viewLogin() + adminLink(); renderNav(); return; }
+  if(!draft) initDraft();
+  if(tab==='admin'&&!isAdmin) tab='table';
+  app.innerHTML = (tab==='pred'?viewPred():tab==='table'?viewTable():tab==='games'?viewGames():viewAdmin()) + adminLink();
+  renderNav();
+  if(allFinished() && !finalShown && connected){ finalShown=true; showFinal(); }
+}
+function adminLink(){ return isAdmin?'':`<footer><a href="#" onclick="adminLogin();return false">⚙️ כניסת מנהל</a> · מופעל ע"י CrossFit BUX 🏋️</footer>`; }
+
+// ---------- מסך סיום ----------
+function showFinal(){
+  const rows=standings(), top=[rows[1],rows[0],rows[2]];
+  const cls=['p2','p1','p3'], med=['🥈','🥇','🥉'];
+  document.getElementById('final').innerHTML = `
+    <h1>🏁 סוף הליגה!</h1><div class="muted">כל המשחקים הסתיימו</div>
+    <div class="podium">${top.map((r,i)=>r?`<div class="pod ${cls[i]}"><div class="who">${i===1?'👑 ':''}${esc(r.name)}</div>
+      <div class="blk">${med[i]}<small>${r.pts} נק'</small></div></div>`:'<div class="pod"></div>').join('')}</div>
+    ${rows[0]?`<div style="font-weight:900;color:var(--y)">👑 ${esc(rows[0].name)} – אלוף BUX של היום!</div>`:''}
+    <div class="closing">נתראה באימון – CrossFit BUX יהוד 🏋️</div>
+    <button class="btn" style="max-width:300px" onclick="document.getElementById('final').classList.remove('show')">לטבלה המלאה</button>`;
+  document.getElementById('final').classList.add('show');
+  confetti();
+}
+function confetti(){
+  const c=document.getElementById('conf'), x=c.getContext('2d'); c.width=innerWidth; c.height=innerHeight;
+  const cols=['#FFD000','#FF6B00','#fff','#22c55e','#ff3d7f'];
+  const ps=Array.from({length:180},()=>({x:Math.random()*c.width,y:-20-Math.random()*c.height,r:4+Math.random()*6,c:cols[Math.random()*5|0],vy:2+Math.random()*3,vx:-1.5+Math.random()*3,a:Math.random()*6,va:-.2+Math.random()*.4}));
+  const t0=Date.now();
+  (function f(){ x.clearRect(0,0,c.width,c.height);
+    ps.forEach(p=>{ p.y+=p.vy; p.x+=p.vx; p.a+=p.va; if(p.y>c.height && Date.now()-t0<5000){p.y=-10;p.x=Math.random()*c.width}
+      x.save(); x.translate(p.x,p.y); x.rotate(p.a); x.fillStyle=p.c; x.fillRect(-p.r/2,-p.r/4,p.r,p.r/2); x.restore(); });
+    if(Date.now()-t0<9000) requestAnimationFrame(f); else x.clearRect(0,0,c.width,c.height); })();
+}
+function toast(msg){ const t=document.createElement('div'); t.className='toast'; t.textContent=msg; document.body.appendChild(t); setTimeout(()=>{t.style.opacity=0;setTimeout(()=>t.remove(),300)},2200); }
+
+// ---------- הפעלה ----------
+let wasLocked = isLocked();
+setInterval(()=>{ const L=isLocked(); if(L!==wasLocked){ wasLocked=L; render(); } else renderStatus(); }, 1000);
+render(); listen();
+</script>
+</body>
+</html>
