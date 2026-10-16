@@ -10,6 +10,11 @@ FEED = f'https://prod-public-api.livescore.com/v1/api/app/date/soccer/{DATE}/3?M
 MAP = {'g1': '1799344', 'g2': '1799345', 'g3': '1799339', 'g4': '1799343', 'g5': '1799341'}
 STOP_AT = datetime.datetime(2026, 10, 16, 16, 45, tzinfo=datetime.timezone.utc)  # 19:45 שעון ישראל
 POLL = 20
+# מצב בדיקה: --test=EID1,EID2 → משחקים חיים אחרים, בסביבת בדיקה נפרדת, נמחק לגמרי ב-15:30
+TEST = next((a.split('=',1)[1].split(',') for a in sys.argv if a.startswith('--test=')), None)
+if TEST:
+    MAP = {f't{i+1}': eid for i, eid in enumerate(TEST)}
+    STOP_AT = datetime.datetime(2026, 10, 16, 12, 30, tzinfo=datetime.timezone.utc)  # 15:30 שעון ישראל
 
 def http(url, method='GET', body=None):
     req = urllib.request.Request(url, method=method, data=None if body is None else json.dumps(body).encode(),
@@ -57,8 +62,21 @@ def tick():
     fin = all((f.get(e) and status_of(f[e].get('Eps')) == 'finished') for e in MAP.values())
     return ('updated ' + ', '.join(f'{k}={v["feed"]}' for k, v in upd.items() if k.startswith('results/'))) if upd else ('done' if fin else 'no change')
 
+def setup_test():
+    f = feed()
+    games = [{'id': gid, 'home': f[eid]['T1'][0]['Nm'], 'away': f[eid]['T2'][0]['Nm']} for gid, eid in MAP.items()]
+    cur = {gid: (int(f[eid].get('Tr1') or 0), int(f[eid].get('Tr2') or 0)) for gid, eid in MAP.items()}
+    # שני שחקני דמה כדי לראות את הטבלה זזה
+    pa = {gid: {'h': h, 'a': a} for gid, (h, a) in cur.items()}
+    pb = {gid: {'h': h + 1, 'a': a} for gid, (h, a) in cur.items()}
+    http(f'{DB}/{NODE}.json', 'PUT', {'meta': {'games': games, 'lock': 'locked'},
+        'players': {'בודק_א': {'name': 'בודק א', 'owner': 'x', 'preds': pa, 'total': sum(h+a for h, a in cur.values())},
+                    'בודק_ב': {'name': 'בודק ב', 'owner': 'x', 'preds': pb, 'joker': 't1', 'total': 9}}})
+    print('test setup:', games, flush=True)
+
 if __name__ == '__main__':
     once = '--once' in sys.argv
+    if TEST: setup_test()
     while True:
         try:
             r = tick()
@@ -69,3 +87,5 @@ if __name__ == '__main__':
             if once: break
         if datetime.datetime.now(datetime.timezone.utc) > STOP_AT: break
         time.sleep(POLL)
+    if TEST:   # מחיקה מלאה של סביבת הבדיקה
+        http(f'{DB}/{NODE}.json', 'DELETE'); print('test deleted', flush=True)

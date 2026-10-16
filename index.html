@@ -142,11 +142,13 @@ const ADS = [
   'הפסדת בניחושים? לפחות תנצח ב-<b>Burpee test</b> 😅',
 ];
 const DB = 'https://command-center-gal-default-rtdb.europe-west1.firebasedatabase.app';
-const NODE = 'bux-predictions' + (/[?&]test=1/.test(location.search) ? '/test' : '');   // ?test=1 = סביבת בדיקה נפרדת
+const IS_TEST = /[?&]test=1/.test(location.search);
+const NODE = 'bux-predictions' + (IS_TEST ? '/test' : '');   // ?test=1 = סביבת בדיקה נפרדת
 </script>
 
 <header>
   <h1>ליגת הניחושים של CrossFit BUX 🏋️⚽</h1>
+  <script>if(/[?&]test=1/.test(location.search)) document.write('<div class="sub" style="background:#000;color:#FFD000;display:inline-block;padding:2px 10px;border-radius:8px;margin-top:6px">🧪 עותק בדיקה – לא האפליקציה האמיתית</div>')</script>
   <div class="sub">ליגה לאומית · כל המשחקים ב-16:00 · הספונסר הרשמי: CrossFit BUX</div>
 </header>
 <div class="wrap" id="app"></div>
@@ -197,6 +199,8 @@ function listen(){
     if(isPatch) for(const k in data) applyAt(path.replace(/\/$/,'')+'/'+k, data[k]);
     else applyAt(path, data);
     connected = true;
+    // סביבת בדיקה: משחקים שהרובוט הגדיר (לא נוגע באפליקציה האמיתית)
+    if(IS_TEST && S.meta.games && S.meta.games.length && S.meta.games[0].id!==GAMES[0].id){ GAMES.splice(0, GAMES.length, ...S.meta.games); draft=null; seenGoals=null; }
     if(firstLoad){ firstLoad=false; initDraft(); }
     syncDraftFromServer();
     detectGoals();

@@ -5,13 +5,16 @@ on:
       node:
         description: 'Firebase node'
         default: 'bux-predictions'
+      test:
+        description: 'test eids (comma separated)'
+        default: ''
   schedule:
     - cron: '45 12 16 10 *'   # גיבוי: 15:45 שעון ישראל, 16.10
 jobs:
   robot:
     runs-on: ubuntu-latest
     timeout-minutes: 330
-    concurrency: robot
+    concurrency: robot-${{ github.event.inputs.node || 'bux-predictions' }}
     steps:
       - uses: actions/checkout@v4
-      - run: python3 robot.py "${{ github.event.inputs.node || 'bux-predictions' }}"
+      - run: python3 robot.py "${{ github.event.inputs.node || 'bux-predictions' }}" ${{ github.event.inputs.test && format('--test={0}', github.event.inputs.test) || '' }}
