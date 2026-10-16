@@ -64,7 +64,18 @@ tr.me td{background:rgba(255,208,0,.08)}
 .gp.ex{background:rgba(34,197,94,.22);border-right:5px solid var(--g)}
 .gp.di{background:rgba(255,208,0,.18);border-right:5px solid var(--y)}
 .gp.wr{background:rgba(239,68,68,.18);border-right:5px solid var(--r)}
-.gp .sc{font-weight:900;font-size:17px;direction:ltr}
+.gp .sc{font-weight:900;font-size:17px}
+.scr{direction:rtl;unicode-bidi:isolate;display:inline-block}
+.jkb{display:block;width:100%;margin-top:10px;padding:10px;border-radius:10px;border:1px dashed #555;background:transparent;color:var(--mut);font-family:inherit;font-weight:900;font-size:14px;cursor:pointer}
+.jkb.on{background:linear-gradient(135deg,#a855f7,#ec4899);color:#fff;border:0}
+.jkb:disabled{cursor:default}
+.card.jk{border:2px solid #c056f5;box-shadow:0 0 18px rgba(192,86,245,.35)}
+.arr{font-size:12px;font-weight:900;margin-inline-start:6px}.arr.up{color:var(--g)}.arr.dn{color:var(--r)}
+.tag.p{color:#ffb070}
+.mini{display:block;font-size:11.5px;color:var(--mut);font-weight:700;margin-top:2px}
+#goalbar{position:fixed;top:0;left:0;right:0;z-index:80;background:var(--y);color:#000;font-weight:900;font-size:17px;text-align:center;padding:16px 14px calc(16px);padding-top:calc(16px + env(safe-area-inset-top));box-shadow:0 8px 30px rgba(0,0,0,.6);transform:translateY(-110%);transition:transform .35s cubic-bezier(.2,1.4,.4,1)}
+#goalbar.show{transform:none}
+#goalbar .big{font-size:26px;display:block;animation:pulse .6s 4}
 .legend{display:flex;gap:10px;font-size:12px;flex-wrap:wrap;color:var(--mut)}
 .legend i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-inline-end:4px;vertical-align:middle}
 /* טאבים */
@@ -116,6 +127,9 @@ const KICKOFF_LABEL = '16:00';
 const LOCK_AT = new Date('2026-10-16T16:00:00+03:00');   // נעילה אוטומטית (שעון ישראל)
 const PTS_EXACT = 5;                                       // ניקוד: תוצאה מדויקת
 const PTS_DIR = 3;                                         // ניקוד: כיוון נכון (ניצחון/תיקו/הפסד)
+const JOKER_MULT = 2;                                      // ג'וקר: מכפיל הנקודות במשחק הנבחר
+const BRAVE_BONUS = 2;                                     // בונוס אמיץ: היחיד שפגע בתוצאה מדויקת
+const PENALTIES = ['חייב 20 ברפיז ב-BUX 😅','חייב 50 סקוואטים ב-BUX 🦵','חייב 30 שכיבות סמיכה ב-BUX 💪']; // אחרון, לפני אחרון, שלישי מהסוף
 const ADMIN_PIN = '1234';                                  // קוד מנהל
 const ADS = [
   'הניחוש הזה מוגש בחסות <b>CrossFit BUX</b> – כי גם לנחש צריך כושר',
@@ -127,7 +141,7 @@ const ADS = [
   'הפסדת בניחושים? לפחות תנצח ב-<b>Burpee test</b> 😅',
 ];
 const DB = 'https://command-center-gal-default-rtdb.europe-west1.firebasedatabase.app';
-const NODE = 'bux-predictions';
+const NODE = 'bux-predictions' + (/[?&]test=1/.test(location.search) ? '/test' : '');   // ?test=1 = סביבת בדיקה נפרדת
 </script>
 
 <header>
@@ -137,6 +151,7 @@ const NODE = 'bux-predictions';
 <div class="wrap" id="app"></div>
 <nav id="nav"></nav>
 <div id="final"></div>
+<div id="goalbar"></div>
 <canvas id="conf"></canvas>
 
 <script>
@@ -147,6 +162,7 @@ let me = lsGet('bux_name');                     // השם נשמר במכשיר
 let tab = lsGet('bux_tab') || 'pred';
 let isAdmin = sessionGet('bux_admin') === '1';
 let draft = null, dirty = false;
+let seenGoals = null, goalTimer = null;
 let finalShown = false, adIdx = Math.floor(Math.random()*ADS.length);
 
 function lsGet(k){ try{return localStorage.getItem(k)}catch(e){return null} }
@@ -175,6 +191,7 @@ function listen(){
     connected = true;
     if(firstLoad){ firstLoad=false; initDraft(); }
     syncDraftFromServer();
+    detectGoals();
     render();
   };
   es.addEventListener('put', onMsg(false));
@@ -183,7 +200,7 @@ function listen(){
   es.onopen = () => { connected=true; renderStatus(); };
 }
 async function api(method, path, body){
-  const r = await fetch(`${DB}/${NODE}/${path}.json`, {method, body: body===undefined?undefined:JSON.stringify(body)});
+  const r = await fetch(`${DB}/${NODE}${path?'/'+path:''}.json`, {method, body: body===undefined?undefined:JSON.stringify(body)});
   if(!r.ok) throw new Error('שגיאת שמירה');
   return r;
 }
@@ -205,39 +222,61 @@ function judge(pred, res){ // 'ex' | 'di' | 'wr'
   if(sign(pred.h-pred.a)===sign(res.h-res.a)) return 'di';
   return 'wr';
 }
+const sc = (h,a,sep=' : ') => `<span class="scr">${h|0}${sep}${a|0}</span>`;   // תוצאה – הבית מימין
+const anyResult = () => GAMES.some(hasResult);
+const actualTotal = () => GAMES.reduce((t,g)=> t + (hasResult(g) ? (S.results[g.id].h|0)+(S.results[g.id].a|0) : 0), 0);
 function standings(){
-  const rows = Object.entries(S.players).map(([k,p])=>{
-    let pts=0, ex=0, di=0;
-    GAMES.forEach(g=>{ if(!hasResult(g)) return; const j=judge(p.preds&&p.preds[g.id], S.results[g.id]);
-      if(j==='ex'){pts+=PTS_EXACT;ex++} else if(j==='di'){pts+=PTS_DIR;di++} });
-    return {k, name:p.name||k, pts, ex, di, sent:!!p.preds};
+  const ps = Object.entries(S.players).filter(([k,p])=>p && typeof p==='object');
+  // כמה פגעו בתוצאה המדויקת בכל משחק (לבונוס האמיץ)
+  const exCount = {};
+  GAMES.forEach(g=>{ if(hasResult(g)) exCount[g.id] = ps.filter(([k,p])=>judge(p.preds&&p.preds[g.id], S.results[g.id])==='ex').length; });
+  const total = actualTotal(), useTotal = anyResult();
+  const rows = ps.map(([k,p])=>{
+    let pts=0, ex=0, di=0, stars=0; const per={}, brave={};
+    GAMES.forEach(g=>{ if(!hasResult(g)) return;
+      const j = judge(p.preds&&p.preds[g.id], S.results[g.id]);
+      let v = j==='ex'?PTS_EXACT : j==='di'?PTS_DIR : 0;
+      if(p.joker===g.id) v *= JOKER_MULT;
+      if(j==='ex' && exCount[g.id]===1){ v += BRAVE_BONUS; stars++; brave[g.id]=true; }
+      if(j==='ex') ex++; else if(j==='di') di++;
+      pts += v; per[g.id] = v; });
+    const tdiff = !useTotal ? 0 : (p.total==null ? 999 : Math.abs(p.total-total));
+    return {k, name:p.name||k, pts, ex, di, stars, per, brave, tdiff, total:p.total, joker:p.joker, sent:!!p.preds};
   });
-  rows.sort((a,b)=> b.pts-a.pts || b.ex-a.ex || a.name.localeCompare(b.name,'he'));
-  rows.forEach((r,i)=>{ const p=rows[i-1]; r.rank = (p && p.pts===r.pts && p.ex===r.ex) ? p.rank : i+1; });
+  // מיון: נקודות ← מדויקות ← הכי קרוב בניחוש סה"כ השערים
+  rows.sort((a,b)=> b.pts-a.pts || b.ex-a.ex || a.tdiff-b.tdiff || a.name.localeCompare(b.name,'he'));
+  rows.forEach((r,i)=>{ const p=rows[i-1]; r.rank = (p && p.pts===r.pts && p.ex===r.ex && p.tdiff===r.tdiff) ? p.rank : i+1; });
   return rows;
 }
+function rankMap(){ const m={}; standings().forEach(r=>m[r.k]=r.rank); return m; }
 const allFinished = () => GAMES.every(g=>S.results[g.id]&&S.results[g.id].status==='finished');
 
 // ---------- טיוטת ניחושים ----------
 function myPlayer(){ return me ? S.players[keyOf(me)] : null; }
+function serverDraft(){ const p=myPlayer(); return p&&p.preds ? {preds:pick(p.preds), joker:p.joker||null, total:p.total??null} : null; }
 function initDraft(){
-  const p = myPlayer(); let saved=null; try{ saved = JSON.parse(lsGet('bux_draft')||'null') }catch(e){}
-  draft = {};
-  GAMES.forEach(g=>{ const v=(saved&&saved[g.id])||(p&&p.preds&&p.preds[g.id])||{h:0,a:0}; draft[g.id]={h:v.h|0,a:v.a|0}; });
-  dirty = !!saved && JSON.stringify(saved)!==JSON.stringify(p&&p.preds?pick(p.preds):null);
+  let saved=null; try{ saved = JSON.parse(lsGet('bux_draft')||'null') }catch(e){}
+  if(saved && !saved.preds) saved=null;
+  const src = saved || serverDraft();
+  draft = { preds: pick((src&&src.preds)||{}), joker: (src&&src.joker)||null, total: src&&src.total!=null ? src.total : null };
+  dirty = !!saved && JSON.stringify(draft)!==JSON.stringify(serverDraft());
 }
 function pick(preds){ const o={}; GAMES.forEach(g=>{ const v=preds[g.id]||{h:0,a:0}; o[g.id]={h:v.h|0,a:v.a|0} }); return o; }
-function syncDraftFromServer(){ if(!dirty && me){ const p=myPlayer(); if(p&&p.preds) draft=pick(p.preds); } }
+function syncDraftFromServer(){ if(!dirty && me){ const s=serverDraft(); if(s) draft=s; } }
+function saveDraft(){ dirty=true; lsSet('bux_draft', JSON.stringify(draft)); render(); }
 function bump(gid, side, d){
   if(isLocked()) return;
-  draft[gid][side] = Math.max(0, Math.min(15, draft[gid][side]+d));
-  dirty = true; lsSet('bux_draft', JSON.stringify(draft)); render();
+  draft.preds[gid][side] = Math.max(0, Math.min(15, draft.preds[gid][side]+d)); saveDraft();
 }
+function setJoker(gid){ if(isLocked()) return; draft.joker = draft.joker===gid ? null : gid; saveDraft(); }
+function bumpTotal(d){ if(isLocked()) return; draft.total = Math.max(0, Math.min(60, (draft.total??0)+d)); saveDraft(); }
 async function submit(){
   if(isLocked()) return toast('הניחושים נעולים 🔒');
+  const miss = [!draft.joker&&"ג'וקר 🃏", draft.total==null&&'ניחוש בונוס 🎯'].filter(Boolean);
+  if(miss.length && !confirm('עוד לא בחרת '+miss.join(' ו')+' – לשלוח בכל זאת?')) return;
   const btn = document.getElementById('sendBtn'); if(btn){btn.disabled=true; btn.textContent='שולח...';}
   try{
-    await api('PUT', 'players/'+keyOf(me), {name:me.trim(), preds:draft, at:Date.now()});
+    await api('PUT', 'players/'+keyOf(me), {name:me.trim(), preds:draft.preds, joker:draft.joker, total:draft.total, at:Date.now()});
     dirty=false; lsSet('bux_draft',null); toast('הניחושים נשלחו! 💪 עכשיו רק לחכות לשריקה');
   }catch(e){ toast('אופס, השליחה נכשלה – נסה שוב'); }
   render();
@@ -261,7 +300,7 @@ function statusBar(){
 function renderStatus(){ const el=document.getElementById('status'); if(el) el.outerHTML=statusBar(); }
 function resLine(g){
   const r=S.results[g.id]; if(!r||!hasResult(g)) return '';
-  return `<div class="real">תוצאה ${r.status==='live'?'<span class="live">חי</span>':'<span class="fin">הסתיים</span>'} &nbsp; <span style="direction:ltr;display:inline-block">${r.h} : ${r.a}</span>  <span class="muted">(${esc(g.home)} – ${esc(g.away)})</span></div>`;
+  return `<div class="real">תוצאה ${r.status==='live'?'<span class="live">חי</span>':'<span class="fin">הסתיים</span>'} &nbsp; ${sc(r.h,r.a)}  <span class="muted">(${esc(g.home)} – ${esc(g.away)})</span></div>`;
 }
 
 function viewLogin(){
@@ -281,18 +320,26 @@ function login(){
 function logout(){ if(!confirm('להתנתק מהמכשיר?')) return; me=null; lsSet('bux_name',null); lsSet('bux_draft',null); render(); }
 
 function viewPred(){
-  const L=isLocked(), p=myPlayer();
+  const L=isLocked(), p=myPlayer(), mine=standings().find(r=>r.k===keyOf(me));
   let h = statusBar() + `<h2>הניחושים של ${esc(me)} 🎯</h2>
-    <div class="muted">${PTS_EXACT} נק' לתוצאה מדויקת · ${PTS_DIR} נק' לכיוון נכון · משחק חי נספר לפי התוצאה הנוכחית · ${L?'הניחושים נעולים':'אפשר לערוך עד '+KICKOFF_LABEL}</div>`;
+    <div class="muted">${PTS_EXACT} נק' לתוצאה מדויקת · ${PTS_DIR} נק' לכיוון נכון · 🃏 ג'וקר = נקודות ×${JOKER_MULT} · ⭐ היחיד שפגע במדויק = +${BRAVE_BONUS} · משחק חי נספר לפי התוצאה הנוכחית · ${L?'הניחושים נעולים':'אפשר לערוך עד '+KICKOFF_LABEL}</div>`;
   GAMES.forEach((g,i)=>{
-    const d=draft[g.id], r=S.results[g.id], j=hasResult(g)?judge(p&&p.preds&&p.preds[g.id],r):null;
-    h += `<div class="card game" ${j?`style="border-color:${j==='ex'?'var(--g)':j==='di'?'var(--y)':'var(--r)'}"`:''}>
-      <div class="meta"><span>משחק ${i+1} · ליגה לאומית</span><span>${KICKOFF_LABEL}${j?' · '+(j==='ex'?'🎯 +'+PTS_EXACT:j==='di'?'✔️ +'+PTS_DIR:'❌ 0'):''}</span></div>
+    const d=draft.preds[g.id], r=S.results[g.id], j=hasResult(g)?judge(p&&p.preds&&p.preds[g.id],r):null, isJ=draft.joker===g.id;
+    const v = mine && mine.per[g.id]!=null ? mine.per[g.id] : null;
+    h += `<div class="card game ${isJ?'jk':''}" ${j&&!isJ?`style="border-color:${j==='ex'?'var(--g)':j==='di'?'var(--y)':'var(--r)'}"`:''}>
+      <div class="meta"><span>משחק ${i+1} · ליגה לאומית</span><span>${KICKOFF_LABEL}${j?' · '+(j==='ex'?'🎯':j==='di'?'✔️':'❌')+' +'+v+(mine.brave[g.id]?' ⭐':''):''}</span></div>
       <div class="teams">
         ${teamStep(g,'h',g.home,d.h,L)}<div class="vs">VS</div>${teamStep(g,'a',g.away,d.a,L)}
-      </div>${resLine(g)}</div>`;
+      </div>${resLine(g)}
+      ${(!L||isJ)?`<button class="jkb ${isJ?'on':''}" ${L?'disabled':''} onclick="setJoker('${g.id}')">🃏 ${isJ?`ג'וקר! הנקודות כאן ×${JOKER_MULT}`:"הפוך לג'וקר"}</button>`:''}</div>`;
     if(i===2) h+=ad();
   });
+  h += `<div class="card" style="text-align:center"><div style="font-weight:900;font-size:17px">🎯 ניחוש בונוס</div>
+    <div class="muted">כמה שערים ייכנסו בסך הכול ב-5 המשחקים? (שובר שוויון)</div>
+    <div class="step"><button class="minus" ${L||!draft.total?'disabled':''} onclick="bumpTotal(-1)">−</button>
+      <span class="val">${draft.total??'?'}</span>
+      <button class="plus" ${L?'disabled':''} onclick="bumpTotal(1)">+</button></div>
+    ${anyResult()?`<div class="muted">בינתיים נכנסו: <b style="color:#fff">${actualTotal()}</b></div>`:''}</div>`;
   if(!L){
     h += `<div class="sticky"><button class="btn" id="sendBtn" onclick="submit()">${p&&p.preds?(dirty?'עדכן ניחושים ✍️':'נשלח ✓ (אפשר לשנות)'):'שלח ניחושים 🚀'}</button>
       ${dirty&&p&&p.preds?'<div class="saved" style="color:var(--o)">יש שינויים שעוד לא נשלחו</div>':''}</div>`;
@@ -310,19 +357,24 @@ function teamStep(g,side,name,val,L){
 }
 
 function viewTable(){
-  const rows=standings(), last=rows.length>1?rows[rows.length-1].rank:0;
-  let h = statusBar() + `<h2>טבלת הדירוג 🏆</h2><div class="muted">מתעדכנת חי עם כל גול</div>`;
+  const rows=standings(), L=isLocked(), prev=S.meta.prevRanks||{};
+  // עונשי BUX: לפי דירוג מהסוף (לא כולל מקום ראשון)
+  const fromBottom=[...new Set(rows.map(r=>r.rank))].filter(x=>x>1).sort((a,b)=>b-a);
+  let h = statusBar() + `<h2>טבלת הדירוג 🏆</h2><div class="muted">מתעדכנת חי עם כל גול · החצים = שינוי מאז עדכון התוצאה האחרון</div>`;
   if(allFinished()) h+=`<button class="btn" style="margin:12px 0" onclick="showFinal(true)">🎉 למסך הסיום</button>`;
   h += `<div class="card" style="padding:6px 10px"><table><thead><tr><th>#</th><th style="text-align:right">שם</th><th>נק'</th><th>🎯 מדויק</th><th>✔️ כיוון</th></tr></thead><tbody>`;
   if(!rows.length) h+=`<tr><td colspan="5" class="muted">עוד אף אחד לא נרשם… מי ראשון? 🏃</td></tr>`;
   rows.forEach(r=>{
-    const king=r.rank===1&&rows.length>1, loser=last>1&&r.rank===last;
+    const king=r.rank===1&&rows.length>1, pi=fromBottom.indexOf(r.rank), pen=pi>=0&&pi<PENALTIES.length?PENALTIES[pi]:'';
+    const d = prev[r.k]!=null ? prev[r.k]-r.rank : 0;
+    const arr = d>0?`<span class="arr up">▲${d}</span>`:d<0?`<span class="arr dn">▼${-d}</span>`:'';
     h+=`<tr class="${me&&r.k===keyOf(me)?'me':''}"><td class="rk">${king?'👑':r.rank}</td>
-      <td class="n">${esc(r.name)}${!r.sent?' <span class="muted">(לא שלח)</span>':''}
-        ${king?'<span class="tag k">👑 אלוף BUX של היום</span>':''}${loser?'<span class="tag l">חייב 20 ברפיז ב-CrossFit BUX 😅</span>':''}</td>
+      <td class="n">${esc(r.name)}${r.stars?' '+'⭐'.repeat(r.stars):''}${arr}${!r.sent?' <span class="muted">(לא שלח)</span>':''}
+        ${king?'<span class="tag k">👑 אלוף BUX של היום</span>':''}${pen?`<span class="tag ${pi===0?'l':'p'}">${pen}</span>`:''}
+        ${L&&r.sent&&r.total!=null?`<span class="mini">ניחוש סה"כ: ${r.total} שערים</span>`:''}</td>
       <td class="pts">${r.pts}</td><td>${r.ex}</td><td>${r.di}</td></tr>`;
   });
-  h += `</tbody></table></div><div class="muted">שובר שוויון: מספר התוצאות המדויקות</div>` + ad();
+  h += `</tbody></table></div><div class="muted">⭐ = היחיד שפגע בתוצאה מדויקת (+${BRAVE_BONUS}) · שובר שוויון: מספר התוצאות המדויקות, ואז הכי קרוב בניחוש סה"כ השערים${anyResult()?` (כרגע נכנסו ${actualTotal()})`:''}</div>` + ad();
   return h;
 }
 
@@ -334,17 +386,22 @@ function viewGames(){
       <div class="muted" style="margin-top:8px">כבר שלחו (${players.length}): ${players.map(p=>esc(p.name)).join(', ')||'—'}</div></div>` + ad();
     return h;
   }
-  h += `<div class="legend"><span><i style="background:var(--g)"></i>מדויק +${PTS_EXACT}</span><span><i style="background:var(--y)"></i>כיוון +${PTS_DIR}</span><span><i style="background:var(--r)"></i>טעות</span></div>`;
+  h += `<div class="legend"><span>🃏 ג'וקר ×${JOKER_MULT}</span><span>⭐ אמיץ +${BRAVE_BONUS}</span><span><i style="background:var(--g)"></i>מדויק +${PTS_EXACT}</span><span><i style="background:var(--y)"></i>כיוון +${PTS_DIR}</span><span><i style="background:var(--r)"></i>טעות</span></div>`;
   GAMES.forEach((g,i)=>{
     const r=S.results[g.id], has=hasResult(g);
     h += `<div class="card"><div style="font-weight:900;font-size:16px">${esc(g.home)} – ${esc(g.away)}</div>
-      <div class="muted" style="margin:4px 0 8px">${has?`${r.status==='live'?'<span class="live">חי</span>':'<span class="fin">הסתיים</span>'} תוצאה: <b style="color:#fff;direction:ltr;display:inline-block">${r.h} : ${r.a}</b>`:'טרם החל'}</div>`;
+      <div class="muted" style="margin:4px 0 8px">${has?`${r.status==='live'?'<span class="live">חי</span>':'<span class="fin">הסתיים</span>'} תוצאה: <b style="color:#fff">${sc(r.h,r.a)}</b>`:'טרם החל'}</div>`;
+    const st = Object.fromEntries(standings().map(x=>[x.name,x]));
     const list = players.map(p=>({p, pr:p.preds[g.id], j:has?judge(p.preds[g.id],r):null}))
       .sort((a,b)=>({ex:0,di:1,wr:2}[a.j]??3)-({ex:0,di:1,wr:2}[b.j]??3));
-    list.forEach(({p,pr,j})=>{ h+=`<div class="gp ${j||''}"><span>${esc(p.name)}</span><span class="sc">${pr?pr.h+' : '+pr.a:'—'}</span></div>`; });
+    list.forEach(({p,pr,j})=>{ const x=st[p.name]||{per:{},brave:{}};
+      h+=`<div class="gp ${j||''}"><span>${esc(p.name)}${p.joker===g.id?' 🃏':''}${x.brave[g.id]?' ⭐':''}${has?` <span class="muted">+${x.per[g.id]||0}</span>`:''}</span><span class="sc">${pr?sc(pr.h,pr.a):'—'}</span></div>`; });
     if(!list.length) h+=`<div class="muted">אין ניחושים</div>`;
     h += `</div>`; if(i===1) h+=ad();
   });
+  h += `<div class="card"><div style="font-weight:900;font-size:16px">🎯 ניחושי בונוס – סה"כ שערים</div>
+    <div class="muted" style="margin:4px 0 8px">${anyResult()?`בינתיים נכנסו: <b style="color:#fff">${actualTotal()}</b>`:'טרם החל'}</div>
+    ${players.slice().sort((a,b)=>(a.total??999)-(b.total??999)).map(p=>`<div class="gp"><span>${esc(p.name)}</span><span class="sc">${p.total??'—'}</span></div>`).join('')}</div>`;
   return h;
 }
 
@@ -373,16 +430,19 @@ function adminStep(g,side,name,val){
     <button class="minus" ${val<=0?'disabled':''} onclick="setScore('${g.id}','${side}',-1)">−</button><span class="val">${val}</span>
     <button class="plus" onclick="setScore('${g.id}','${side}',1)">+</button></div></div>`;
 }
-async function setScore(gid, side, d){
+async function pushResult(gid, r){
+  const prev = rankMap();               // הדירוג לפני העדכון → חצים + "עלו בטבלה"
+  S.results[gid]=r; render();
+  try{ await api('PATCH','', {['results/'+gid]:r, 'meta/prevRanks':prev}); }catch(e){ toast('שמירה נכשלה'); }
+}
+function setScore(gid, side, d){
   const r=Object.assign({h:0,a:0,status:'live'}, S.results[gid]||{});
   r[side]=Math.max(0,(r[side]|0)+d); if(r.status==='none') r.status='live';
-  S.results[gid]=r; render();
-  try{ await api('PUT','results/'+gid,r); }catch(e){ toast('שמירה נכשלה'); }
+  pushResult(gid, r);
 }
-async function setStatus(gid, st){
+function setStatus(gid, st){
   const r=Object.assign({h:0,a:0}, S.results[gid]||{}); r.status=st;
-  S.results[gid]=r; render();
-  try{ await api('PUT','results/'+gid,r); }catch(e){ toast('שמירה נכשלה'); }
+  pushResult(gid, r);
 }
 async function setLock(v){ S.meta.lock=v||undefined; render(); try{ await api('PUT','meta/lock',v); }catch(e){ toast('שמירה נכשלה'); } }
 async function delPlayer(k){ if(!confirm('למחוק את '+(S.players[k]&&S.players[k].name)+'?')) return; try{ await api('DELETE','players/'+k); }catch(e){ toast('מחיקה נכשלה'); } }
@@ -431,6 +491,20 @@ function confetti(){
     ps.forEach(p=>{ p.y+=p.vy; p.x+=p.vx; p.a+=p.va; if(p.y>c.height && Date.now()-t0<5000){p.y=-10;p.x=Math.random()*c.width}
       x.save(); x.translate(p.x,p.y); x.rotate(p.a); x.fillStyle=p.c; x.fillRect(-p.r/2,-p.r/4,p.r,p.r/2); x.restore(); });
     if(Date.now()-t0<9000) requestAnimationFrame(f); else x.clearRect(0,0,c.width,c.height); })();
+}
+function goalSnapshot(){ const o={}; GAMES.forEach(g=>{ o[g.id]=hasResult(g)?(S.results[g.id].h|0)+(S.results[g.id].a|0):-1 }); return o; }
+function detectGoals(){
+  const now=goalSnapshot();
+  if(seenGoals) GAMES.forEach(g=>{ if(now[g.id] > Math.max(seenGoals[g.id],0)) showGoal(g); });
+  seenGoals=now;
+}
+function showGoal(g){
+  const r=S.results[g.id], prev=S.meta.prevRanks||{};
+  const up=standings().filter(x=>prev[x.k]!=null && prev[x.k]>x.rank).length;
+  const el=document.getElementById('goalbar');
+  el.innerHTML=`<span class="big">⚽ גול!</span>${esc(g.home)} ${sc(r.h,r.a,'–')} ${esc(g.away)}${up?` · ${up} עלו בטבלה`:''}`;
+  el.classList.add('show'); try{ navigator.vibrate&&navigator.vibrate([120,60,120]) }catch(e){}
+  clearTimeout(goalTimer); goalTimer=setTimeout(()=>el.classList.remove('show'),6000);
 }
 function toast(msg){ const t=document.createElement('div'); t.className='toast'; t.textContent=msg; document.body.appendChild(t); setTimeout(()=>{t.style.opacity=0;setTimeout(()=>t.remove(),300)},2200); }
 
