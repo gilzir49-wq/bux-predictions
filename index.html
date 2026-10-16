@@ -107,6 +107,7 @@ footer a{color:var(--mut)}
 .pod .blk small{font-size:14px}
 .closing{font-weight:900;font-size:20px;margin:14px 0 22px}
 canvas#conf{position:fixed;inset:0;pointer-events:none;z-index:60}
+.toast.err{background:var(--r);color:#fff}.toast.big{font-size:22px;padding:16px 26px}
 .toast{position:fixed;top:16px;left:50%;transform:translateX(-50%);background:var(--y);color:#000;font-weight:900;padding:12px 18px;border-radius:12px;z-index:70;box-shadow:0 6px 20px rgba(0,0,0,.5);transition:opacity .3s}
 </style>
 </head>
@@ -163,6 +164,13 @@ let tab = lsGet('bux_tab') || 'pred';
 let isAdmin = sessionGet('bux_admin') === '1';
 let draft = null, dirty = false;
 let seenGoals = null, goalTimer = null;
+let aed = null;                                 // עריכת ניחושים ע"י מנהל
+// מזהה מכשיר אקראי – רק המכשיר שיצר שחקן יכול לערוך אותו (נשמר גיבוב בלבד)
+let DEVICE = lsGet('bux_dev'); if(!DEVICE){ DEVICE = (crypto.randomUUID?crypto.randomUUID():Math.random().toString(36).slice(2)+Date.now().toString(36)); lsSet('bux_dev', DEVICE); }
+let MYHASH = null;
+(async()=>{ try{ const b=await crypto.subtle.digest('SHA-256', new TextEncoder().encode('bux:'+DEVICE)); MYHASH=[...new Uint8Array(b)].map(x=>x.toString(16).padStart(2,'0')).join(''); }
+  catch(e){ let h=0; for(const c of 'bux:'+DEVICE) h=(h*31+c.charCodeAt(0))|0; MYHASH='h'+(h>>>0).toString(16)+DEVICE.length; } render(); })();
+const isMine = p => !p || !p.owner || p.owner===MYHASH;
 let finalShown = false, adIdx = Math.floor(Math.random()*ADS.length);
 
 function lsGet(k){ try{return localStorage.getItem(k)}catch(e){return null} }
@@ -200,9 +208,21 @@ function listen(){
   es.onopen = () => { connected=true; renderStatus(); };
 }
 async function api(method, path, body){
-  const r = await fetch(`${DB}/${NODE}${path?'/'+path:''}.json`, {method, body: body===undefined?undefined:JSON.stringify(body)});
-  if(!r.ok) throw new Error('שגיאת שמירה');
-  return r;
+  const ctl = new AbortController(), t = setTimeout(()=>ctl.abort(), 8000);   // אינטרנט חלש: לא תוקעים
+  try{
+    const r = await fetch(`${DB}/${NODE}${path?'/'+path:''}.json`, {method, body: body===undefined?undefined:JSON.stringify(body), signal:ctl.signal});
+    if(!r.ok) throw new Error('שגיאת שמירה');
+    return r;
+  } finally { clearTimeout(t); }
+}
+// שמירה עם ניסיונות חוזרים + הודעה ברורה
+async function save(method, path, body, okMsg='נשמר! ✅'){
+  for(let i=1;i<=4;i++){
+    try{ await api(method, path, body); if(okMsg) toast(okMsg, true); return true; }
+    catch(e){ if(i<4){ toast(`השמירה נכשלה 📶 מנסה שוב… (${i+1}/4)`, false, 'err'); await new Promise(r=>setTimeout(r, 1200*i)); } }
+  }
+  toast('❌ לא נשמר – בדוק קליטה ולחץ שוב', false, 'err', 5000);
+  return false;
 }
 
 // ---------- נעילה ----------
@@ -275,10 +295,9 @@ async function submit(){
   const miss = [!draft.joker&&"ג'וקר 🃏", draft.total==null&&'ניחוש בונוס 🎯'].filter(Boolean);
   if(miss.length && !confirm('עוד לא בחרת '+miss.join(' ו')+' – לשלוח בכל זאת?')) return;
   const btn = document.getElementById('sendBtn'); if(btn){btn.disabled=true; btn.textContent='שולח...';}
-  try{
-    await api('PUT', 'players/'+keyOf(me), {name:me.trim(), preds:draft.preds, joker:draft.joker, total:draft.total, at:Date.now()});
-    dirty=false; lsSet('bux_draft',null); toast('הניחושים נשלחו! 💪 עכשיו רק לחכות לשריקה');
-  }catch(e){ toast('אופס, השליחה נכשלה – נסה שוב'); }
+  if(!isMine(myPlayer())){ render(); return toast('השם הזה שייך למכשיר אחר 🙅', false, 'err'); }
+  const ok = await save('PUT', 'players/'+keyOf(me), {name:me.trim(), owner:MYHASH, preds:draft.preds, joker:draft.joker, total:draft.total, at:Date.now()});
+  if(ok){ dirty=false; lsSet('bux_draft',null); }
   render();
 }
 
@@ -306,16 +325,24 @@ function resLine(g){
 function viewLogin(){
   return `<div class="card" style="text-align:center;margin-top:24px">
     <div style="font-size:54px">🏋️⚽</div>
-    <h2 style="margin-top:4px">מי אתה, אלוף?</h2>
-    <div class="muted">רק שם. בלי סיסמה, בלי הרשמה, בלי תירוצים.</div>
-    <input class="name" id="nameIn" placeholder="השם שלך" maxlength="20" autocomplete="off">
-    <button class="btn" onclick="login()">יאללה, לנחש! 🔥</button>
+    <h2 style="margin-top:4px">איך קוראים לך?</h2>
+    <input class="name" id="nameIn" placeholder="השם שלך" maxlength="20" autocomplete="off" enterkeyhint="go" onkeydown="if(event.key==='Enter')login()">
+    <div id="loginErr" style="color:#ff8080;font-weight:900;min-height:22px;margin-bottom:6px"></div>
+    <button class="btn" id="loginBtn" onclick="login()">יאללה 🔥</button>
   </div>${ad()}`;
 }
-function login(){
-  const v=(document.getElementById('nameIn').value||'').trim();
-  if(v.length<2) return toast('שם של לפחות 2 אותיות 🙂');
-  me=v; lsSet('bux_name',v); lsSet('bux_draft',null); initDraft(); tab='pred'; render();
+async function login(){
+  const v=(document.getElementById('nameIn').value||'').trim().replace(/\s+/g,' '), err=document.getElementById('loginErr');
+  if(v.length<2){ err.textContent='צריך לפחות 2 אותיות 🙂'; return; }
+  if(firstLoad || !MYHASH){ err.textContent='רגע, מתחבר… נסה שוב בעוד שנייה'; return; }
+  const k=keyOf(v), ex=S.players[k];
+  if(ex && !isMine(ex)){ err.textContent='השם הזה כבר תפוס, נסה כינוי אחר'; return; }
+  const btn=document.getElementById('loginBtn'); btn.disabled=true; btn.textContent='נכנס...';
+  if(!ex){   // שומרים את השם מיד כדי שאף אחד אחר לא יתפוס אותו
+    const ok = await save('PUT','players/'+k,{name:v, owner:MYHASH, at:Date.now()}, null);
+    if(!ok){ btn.disabled=false; btn.textContent='יאללה 🔥'; return; }
+  }
+  me=v; lsSet('bux_name',v); lsSet('bux_draft',null); initDraft(); tab='pred'; lsSet('bux_tab','pred'); render();
 }
 function logout(){ if(!confirm('להתנתק מהמכשיר?')) return; me=null; lsSet('bux_name',null); lsSet('bux_draft',null); render(); }
 
@@ -420,8 +447,13 @@ function viewAdmin(){
         <button class="${st==='finished'?'on grn':''}" onclick="setStatus('${g.id}','finished')">✅ הסתיים</button></div></div>`;
   });
   const ps=Object.entries(S.players);
-  h += `<div class="card"><b>משתתפים (${ps.length})</b>`;
-  ps.forEach(([k,p])=>{ h+=`<div class="prow"><span>${esc(p.name)} ${p.preds?'✅':'⏳'}</span><button class="x" onclick="delPlayer('${esc(k)}')">מחק</button></div>`; });
+  h += `<div class="card" id="players"><b>משתתפים (${ps.length})</b> <span class="muted">– עריכה/מחיקה של ניחושים (גם אחרי הנעילה)</span>`;
+  ps.forEach(([k,p])=>{
+    h+=`<div class="prow"><span>${esc(p.name)} ${p.preds?'✅':'⏳'}</span><span style="display:flex;gap:6px">
+      <button class="x" style="border-color:var(--y);color:var(--y)" onclick="aedOpen('${esc(k)}')">ערוך</button>
+      <button class="x" onclick="delPlayer('${esc(k)}')">מחק</button></span></div>`;
+    if(aed && aed.k===k) h += aedView();
+  });
   h += `</div><button class="btn sec" onclick="isAdmin=false;sessionSet('bux_admin','0');tab='table';render()">יציאה ממצב מנהל</button>`;
   return h;
 }
@@ -433,7 +465,7 @@ function adminStep(g,side,name,val){
 async function pushResult(gid, r){
   const prev = rankMap();               // הדירוג לפני העדכון → חצים + "עלו בטבלה"
   S.results[gid]=r; render();
-  try{ await api('PATCH','', {['results/'+gid]:r, 'meta/prevRanks':prev}); }catch(e){ toast('שמירה נכשלה'); }
+  await save('PATCH','', {['results/'+gid]:r, 'meta/prevRanks':prev}, null);
 }
 function setScore(gid, side, d){
   const r=Object.assign({h:0,a:0,status:'live'}, S.results[gid]||{});
@@ -444,22 +476,48 @@ function setStatus(gid, st){
   const r=Object.assign({h:0,a:0}, S.results[gid]||{}); r.status=st;
   pushResult(gid, r);
 }
-async function setLock(v){ S.meta.lock=v||undefined; render(); try{ await api('PUT','meta/lock',v); }catch(e){ toast('שמירה נכשלה'); } }
-async function delPlayer(k){ if(!confirm('למחוק את '+(S.players[k]&&S.players[k].name)+'?')) return; try{ await api('DELETE','players/'+k); }catch(e){ toast('מחיקה נכשלה'); } }
+async function setLock(v){ S.meta.lock=v||undefined; render(); await save('PUT','meta/lock',v); }
+function aedOpen(k){
+  const p=S.players[k]; if(!p) return;
+  aed = aed&&aed.k===k ? null : {k, preds:pick(p.preds||{}), joker:p.joker||null, total:p.total??null};
+  render();
+}
+function aedView(){
+  let h=`<div class="card" style="background:#000;border-color:var(--y)"><b>✏️ עריכת ${esc(S.players[aed.k].name)}</b>`;
+  GAMES.forEach(g=>{ const d=aed.preds[g.id], isJ=aed.joker===g.id;
+    h+=`<div class="game" style="margin-top:12px"><div class="teams">
+      ${['h','a'].map((sd,ix)=>`${ix?'<div class="vs">VS</div>':''}<div class="team"><div class="nm" style="min-height:0;font-size:13px">${esc(sd==='h'?g.home:g.away)}</div><div class="step">
+        <button class="minus" onclick="aedBump('${g.id}','${sd}',-1)">−</button><span class="val" style="font-size:26px">${d[sd]}</span>
+        <button class="plus" onclick="aedBump('${g.id}','${sd}',1)">+</button></div></div>`).join('')}</div>
+      <button class="jkb ${isJ?'on':''}" style="padding:6px" onclick="aed.joker=aed.joker==='${g.id}'?null:'${g.id}';render()">🃏 ${isJ?"ג'וקר":"ג'וקר?"}</button></div>`; });
+  h+=`<div style="text-align:center;margin-top:12px"><b>🎯 סה"כ שערים</b><div class="step">
+    <button class="minus" onclick="aed.total=Math.max(0,(aed.total??0)-1);render()">−</button><span class="val">${aed.total??'?'}</span>
+    <button class="plus" onclick="aed.total=Math.min(60,(aed.total??0)+1);render()">+</button></div></div>
+    <div style="display:flex;gap:8px;margin-top:12px"><button class="btn" style="font-size:16px;padding:12px" onclick="aedSave()">שמור ✅</button>
+    <button class="btn sec" onclick="aed=null;render()">ביטול</button></div></div>`;
+  return h;
+}
+function aedBump(gid,side,d){ aed.preds[gid][side]=Math.max(0,Math.min(15,aed.preds[gid][side]+d)); render(); }
+async function aedSave(){
+  const body={preds:aed.preds, joker:aed.joker, total:aed.total, at:Date.now()};
+  if(await save('PATCH','players/'+aed.k, body)){ aed=null; render(); }
+}
+async function delPlayer(k){ if(!confirm('למחוק את '+(S.players[k]&&S.players[k].name)+'?')) return; await save('DELETE','players/'+k, undefined, 'נמחק 🗑️'); }
 function adminLogin(){
   const pin=prompt('קוד מנהל:'); if(pin===null) return;
   if(pin===ADMIN_PIN){ isAdmin=true; sessionSet('bux_admin','1'); tab='admin'; render(); } else toast('קוד שגוי 🙅');
 }
 
 function renderNav(){
-  const tabs=[['pred','🎯','ניחושים'],['table','🏆','טבלה'],['games','👀','מי ניחש מה']];
+  const tabs=[['pred','🎯','ניחושים'],['table','🏆','טבלה'],['games','👀','מי ניחש מה']].filter(t=>me||t[0]!=='pred');
   if(isAdmin) tabs.push(['admin','⚙️','מנהל']);
-  document.getElementById('nav').innerHTML = me ? tabs.map(([k,ic,l])=>`<button class="${tab===k?'on':''}" onclick="go('${k}')"><span class="ic">${ic}</span>${l}</button>`).join('') : '';
+  document.getElementById('nav').innerHTML = (me||isAdmin) ? tabs.map(([k,ic,l])=>`<button class="${tab===k?'on':''}" onclick="go('${k}')"><span class="ic">${ic}</span>${l}</button>`).join('') : '';
 }
 function go(k){ tab=k; lsSet('bux_tab',k); render(); window.scrollTo(0,0); }
 function render(){
   const app=document.getElementById('app');
-  if(!me){ app.innerHTML = viewLogin() + adminLink(); renderNav(); return; }
+  if(!me && !isAdmin){ app.innerHTML = viewLogin() + adminLink(); renderNav(); return; }
+  if(!me && tab==='pred') tab='admin';
   if(!draft) initDraft();
   if(tab==='admin'&&!isAdmin) tab='table';
   app.innerHTML = (tab==='pred'?viewPred():tab==='table'?viewTable():tab==='games'?viewGames():viewAdmin()) + adminLink();
@@ -506,12 +564,17 @@ function showGoal(g){
   el.classList.add('show'); try{ navigator.vibrate&&navigator.vibrate([120,60,120]) }catch(e){}
   clearTimeout(goalTimer); goalTimer=setTimeout(()=>el.classList.remove('show'),6000);
 }
-function toast(msg){ const t=document.createElement('div'); t.className='toast'; t.textContent=msg; document.body.appendChild(t); setTimeout(()=>{t.style.opacity=0;setTimeout(()=>t.remove(),300)},2200); }
+function toast(msg, big, kind, ms=2400){
+  document.querySelectorAll('.toast').forEach(x=>x.remove());
+  const t=document.createElement('div'); t.className='toast'+(kind==='err'?' err':'')+(big?' big':''); t.textContent=msg; document.body.appendChild(t);
+  setTimeout(()=>{t.style.opacity=0;setTimeout(()=>t.remove(),300)},ms);
+}
 
 // ---------- הפעלה ----------
 let wasLocked = isLocked();
 setInterval(()=>{ const L=isLocked(); if(L!==wasLocked){ wasLocked=L; render(); } else renderStatus(); }, 1000);
 render(); listen();
+if(/[?&]admin=1/.test(location.search) || /\/admin\/?$/.test(location.pathname)){ if(isAdmin){ tab='admin'; render(); } else setTimeout(adminLogin, 300); }
 </script>
 </body>
 </html>
