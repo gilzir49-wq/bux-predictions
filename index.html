@@ -342,10 +342,10 @@ async function login(){
   if(v.length<2){ err.textContent='צריך לפחות 2 אותיות 🙂'; return; }
   if(firstLoad || !MYHASH){ err.textContent='רגע, מתחבר… נסה שוב בעוד שנייה'; return; }
   const k=keyOf(v), ex=S.players[k];
-  if(ex && !isMine(ex)){ err.textContent='השם הזה כבר תפוס, נסה כינוי אחר'; return; }
+  if(ex && !isMine(ex)){ err.innerHTML='השם הזה כבר תפוס, נסה כינוי אחר<div class="muted" style="font-weight:400;margin-top:4px">זה אתה מטלפון או דפדפן אחר? בקש מהמנהל ללחוץ "שחרר" ליד השם שלך</div>'; return; }
   const btn=document.getElementById('loginBtn'); btn.disabled=true; btn.textContent='נכנס...';
-  if(!ex){   // שומרים את השם מיד כדי שאף אחד אחר לא יתפוס אותו
-    const ok = await save('PUT','players/'+k,{name:v, owner:MYHASH, at:Date.now()}, null);
+  if(!ex || !ex.owner){   // שומרים את השם מיד (או תופסים שם ששוחרר ע"י המנהל) כדי שאף אחד אחר לא יתפוס אותו
+    const ok = await save(ex?'PATCH':'PUT','players/'+k, ex?{owner:MYHASH}:{name:v, owner:MYHASH, at:Date.now()}, null);
     if(!ok){ btn.disabled=false; btn.textContent='יאללה 🔥'; return; }
   }
   me=v; lsSet('bux_name',v); lsSet('bux_draft',null); initDraft(); tab='pred'; lsSet('bux_tab','pred'); render();
@@ -461,6 +461,7 @@ function viewAdmin(){
   ps.forEach(([k,p])=>{
     h+=`<div class="prow"><span>${esc(p.name)} ${p.preds?'✅':'⏳'}</span><span style="display:flex;gap:6px">
       <button class="x" style="border-color:var(--y);color:var(--y)" onclick="aedOpen('${esc(k)}')">ערוך</button>
+      ${p.owner?`<button class="x" style="border-color:#888;color:#ccc" onclick="releasePlayer('${esc(k)}')">שחרר</button>`:''}
       <button class="x" onclick="delPlayer('${esc(k)}')">מחק</button></span></div>`;
     if(aed && aed.k===k) h += aedView();
   });
@@ -513,6 +514,8 @@ async function aedSave(){
   const body={preds:aed.preds, joker:aed.joker, total:aed.total, at:Date.now()};
   if(await save('PATCH','players/'+aed.k, body)){ aed=null; render(); }
 }
+// שחרור שם: מאפשר לשחקן להיכנס שוב מטלפון/דפדפן אחר (הניחושים נשמרים)
+async function releasePlayer(k){ if(!confirm('לשחרר את '+(S.players[k]&&S.players[k].name)+'? הוא יוכל להיכנס שוב עם אותו שם ממכשיר אחר, והניחושים נשמרים')) return; await save('DELETE','players/'+k+'/owner', undefined, 'שוחרר ✅ – אפשר להיכנס שוב עם השם'); }
 async function delPlayer(k){ if(!confirm('למחוק את '+(S.players[k]&&S.players[k].name)+'?')) return; await save('DELETE','players/'+k, undefined, 'נמחק 🗑️'); }
 function adminLogin(){
   const pin=prompt('קוד מנהל:'); if(pin===null) return;
