@@ -248,7 +248,7 @@ function judge(pred, res){ // 'ex' | 'di' | 'wr'
   return 'wr';
 }
 // תגית "חי" עם הדקה הנוכחית מהרובוט
-function liveTag(r){ const m=(r&&r.min||'').trim(); const t = !m ? '' : m==='HT' ? ' · מחצית' : ' · '+m.replace(/'$/,'')+"'"; return `<span class="live">חי${t}</span>`; }
+function liveTag(r){ const m=(r&&r.min||'').trim(); const t = !m ? '' : m==='HT' ? ' · מחצית' : ' · <bdi dir="ltr">'+esc(m.replace(/'$/,''))+"'</bdi>"; return `<span class="live">חי${t}</span>`; }
 const sc = (h,a,sep=' : ') => `<span class="scr">${h|0}${sep}${a|0}</span>`;   // תוצאה – הבית מימין
 const anyResult = (R=S.results) => GAMES.some(g=>hasResult(g,R));
 const actualTotal = (R=S.results) => GAMES.reduce((t,g)=> t + (hasResult(g,R) ? (R[g.id].h|0)+(R[g.id].a|0) : 0), 0);
