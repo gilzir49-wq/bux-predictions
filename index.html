@@ -114,6 +114,8 @@ const GAMES = [
 ];
 const KICKOFF_LABEL = '16:00';
 const LOCK_AT = new Date('2026-10-16T16:00:00+03:00');   // נעילה אוטומטית (שעון ישראל)
+const PTS_EXACT = 5;                                       // ניקוד: תוצאה מדויקת
+const PTS_DIR = 3;                                         // ניקוד: כיוון נכון (ניצחון/תיקו/הפסד)
 const ADMIN_PIN = '1234';                                  // קוד מנהל
 const ADS = [
   'הניחוש הזה מוגש בחסות <b>CrossFit BUX</b> – כי גם לנחש צריך כושר',
@@ -207,7 +209,7 @@ function standings(){
   const rows = Object.entries(S.players).map(([k,p])=>{
     let pts=0, ex=0, di=0;
     GAMES.forEach(g=>{ if(!hasResult(g)) return; const j=judge(p.preds&&p.preds[g.id], S.results[g.id]);
-      if(j==='ex'){pts+=3;ex++} else if(j==='di'){pts+=1;di++} });
+      if(j==='ex'){pts+=PTS_EXACT;ex++} else if(j==='di'){pts+=PTS_DIR;di++} });
     return {k, name:p.name||k, pts, ex, di, sent:!!p.preds};
   });
   rows.sort((a,b)=> b.pts-a.pts || b.ex-a.ex || a.name.localeCompare(b.name,'he'));
@@ -281,11 +283,11 @@ function logout(){ if(!confirm('להתנתק מהמכשיר?')) return; me=null;
 function viewPred(){
   const L=isLocked(), p=myPlayer();
   let h = statusBar() + `<h2>הניחושים של ${esc(me)} 🎯</h2>
-    <div class="muted">3 נק' לתוצאה מדויקת · נקודה לכיוון נכון · ${L?'הניחושים נעולים':'אפשר לערוך עד '+KICKOFF_LABEL}</div>`;
+    <div class="muted">${PTS_EXACT} נק' לתוצאה מדויקת · ${PTS_DIR} נק' לכיוון נכון · משחק חי נספר לפי התוצאה הנוכחית · ${L?'הניחושים נעולים':'אפשר לערוך עד '+KICKOFF_LABEL}</div>`;
   GAMES.forEach((g,i)=>{
     const d=draft[g.id], r=S.results[g.id], j=hasResult(g)?judge(p&&p.preds&&p.preds[g.id],r):null;
     h += `<div class="card game" ${j?`style="border-color:${j==='ex'?'var(--g)':j==='di'?'var(--y)':'var(--r)'}"`:''}>
-      <div class="meta"><span>משחק ${i+1} · ליגה לאומית</span><span>${KICKOFF_LABEL}${j?' · '+(j==='ex'?'🎯 +3':j==='di'?'✔️ +1':'❌ 0'):''}</span></div>
+      <div class="meta"><span>משחק ${i+1} · ליגה לאומית</span><span>${KICKOFF_LABEL}${j?' · '+(j==='ex'?'🎯 +'+PTS_EXACT:j==='di'?'✔️ +'+PTS_DIR:'❌ 0'):''}</span></div>
       <div class="teams">
         ${teamStep(g,'h',g.home,d.h,L)}<div class="vs">VS</div>${teamStep(g,'a',g.away,d.a,L)}
       </div>${resLine(g)}</div>`;
@@ -332,7 +334,7 @@ function viewGames(){
       <div class="muted" style="margin-top:8px">כבר שלחו (${players.length}): ${players.map(p=>esc(p.name)).join(', ')||'—'}</div></div>` + ad();
     return h;
   }
-  h += `<div class="legend"><span><i style="background:var(--g)"></i>מדויק +3</span><span><i style="background:var(--y)"></i>כיוון +1</span><span><i style="background:var(--r)"></i>טעות</span></div>`;
+  h += `<div class="legend"><span><i style="background:var(--g)"></i>מדויק +${PTS_EXACT}</span><span><i style="background:var(--y)"></i>כיוון +${PTS_DIR}</span><span><i style="background:var(--r)"></i>טעות</span></div>`;
   GAMES.forEach((g,i)=>{
     const r=S.results[g.id], has=hasResult(g);
     h += `<div class="card"><div style="font-weight:900;font-size:16px">${esc(g.home)} – ${esc(g.away)}</div>
